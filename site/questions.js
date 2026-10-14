@@ -31,9 +31,9 @@ window.TEST_PARTS = [
     titleEn: "Part 1 · Warm-up",
     intro: "電腦考官會用英文問你幾個簡單的問題。聽完題目後，聽到「嗶」一聲，就開始用英文回答。",
     items: [
-      { id: "P1-1", say: "Hello! What's your name?", prep: 2, answer: 10 },
-      { id: "P1-2", say: "How old are you?", prep: 2, answer: 10 },
-      { id: "P1-3", say: "What grade are you in?", prep: 2, answer: 10 },
+      { id: "P1-1", say: "Hello! What's your name?", prep: 5, answer: 15 },
+      { id: "P1-2", say: "How old are you?", prep: 5, answer: 15 },
+      { id: "P1-3", say: "What grade are you in?", prep: 5, answer: 15 },
     ],
   },
   {
@@ -53,9 +53,9 @@ window.TEST_PARTS = [
     titleEn: "Part 2B · Picture Questions",
     intro: "請看圖片。電腦考官會問你關於圖片的問題，聽到「嗶」一聲後，用英文回答。",
     items: [
-      { id: "P2B-1", say: "Look at the picture. What is the boy doing?", picture: "park", prep: 5, answer: 10 },
-      { id: "P2B-2", say: "What is the girl doing?", picture: "park", prep: 5, answer: 10 },
-      { id: "P2B-3", say: "How is the weather?", picture: "park", prep: 5, answer: 10 },
+      { id: "P2B-1", say: "Look at the picture. What is the boy doing?", picture: "park", prep: 10, answer: 15 },
+      { id: "P2B-2", say: "What is the girl doing?", picture: "park", prep: 10, answer: 15 },
+      { id: "P2B-3", say: "How is the weather?", picture: "park", prep: 10, answer: 15 },
     ],
   },
   {
@@ -69,8 +69,8 @@ window.TEST_PARTS = [
         say: "Look at the four pictures. Tell the story.",
         hint: "可以這樣開始：This is Amy. It is Saturday morning…",
         pictures: ["wakeUp", "breakfast", "walkDog", "rain"],
-        prep: 30,
-        answer: 60,
+        prep: 60,
+        answer: 90,
       },
     ],
   },
@@ -80,9 +80,9 @@ window.TEST_PARTS = [
     titleEn: "Part 4 · Questions About You",
     intro: "電腦考官會問一些關於你自己的問題。請盡量用完整的句子回答，可以多說一點喔！",
     items: [
-      { id: "P4-1", say: "What do you usually eat for breakfast?", prep: 5, answer: 20 },
-      { id: "P4-2", say: "What do you like to do on weekends?", prep: 5, answer: 20 },
-      { id: "P4-3", say: "What is your favorite animal? Why do you like it?", prep: 5, answer: 20 },
+      { id: "P4-1", say: "What do you usually eat for breakfast?", prep: 10, answer: 20 },
+      { id: "P4-2", say: "What do you like to do on weekends?", prep: 10, answer: 20 },
+      { id: "P4-3", say: "What is your favorite animal? Why do you like it?", prep: 10, answer: 20 },
     ],
   },
 ];
