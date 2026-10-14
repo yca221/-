@@ -109,6 +109,7 @@
     <ul>
       <li>找一個安靜的地方，戴耳機會更好。</li>
       <li>瀏覽器問「要不要使用麥克風」時，請按 <b>允許</b>。</li>
+      <li>iPad：請用 <b>Safari</b> 開啟（不要在 LINE 裡面開），音量調大。</li>
       <li>測驗大約 <b id="est-min">10</b> 分鐘，中途不要關掉或重新整理網頁。</li>
     </ul>
   </div>
@@ -154,6 +155,7 @@
   </div>
 
   <button class="btn hidden" id="btn-tap-play">▶ 按這裡播放題目</button>
+  <button class="btn red hidden" id="btn-mic-retry">🎤 再試一次</button>
   <div id="ctl-prep" class="btns hidden">
     <button class="btn ghost" id="btn-replay">🔊 再聽一次</button>
     <button class="btn" id="btn-skip-prep">準備好了 →</button>
@@ -306,23 +308,47 @@ $("btn-to-mic").onclick = () => {
   show("screen-mic");
 };
 
-/* ---------------- 麥克風 / 錄音 ---------------- */
-let stream = null, audioCtx = null, analyser = null, meterEl = null;
+/* ---------------- 麥克風 / 錄音 ----------------
+   iPad / iPhone 注意事項：
+   - 麥克風開著的時候，iPad 播放聲音會變很小聲或聽不到 → 只在錄音的那幾秒打開麥克風，錄完立刻關掉
+   - Safari 錄出來的是 m4a（audio/mp4），之後一樣轉成 MP3 */
+const UA = navigator.userAgent;
+const IS_APPLE = /iPad|iPhone|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1)
+  || (/Safari/.test(UA) && !/Chrome|Chromium|Edg|OPR|Firefox|CriOS|FxiOS/.test(UA));
+const IS_IOS = /iPad|iPhone|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+const IS_CHROMEOS = /CrOS/.test(UA);
+let audioCtx = null, analyser = null, meterEl = null, mic = null;
 
-async function ensureStream(){
-  if (stream) return stream;
-  if (!navigator.mediaDevices?.getUserMedia) throw new Error("NO_MEDIA");
-  stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+function ensureAudio(){                 // 要在學生按按鈕的當下呼叫（iPad 規定）
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
-    audioCtx.createMediaStreamSource(stream).connect(analyser);
-    requestAnimationFrame(meterLoop);
-  } catch (e) { console.warn("音量條無法使用", e); }
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
+      requestAnimationFrame(meterLoop);
+    }
+    audioCtx.resume?.();
+  } catch (e) { console.warn("音訊功能無法使用", e); }
+}
+function setAudioSession(type){ try { if (navigator.audioSession) navigator.audioSession.type = type; } catch (e) {} }
+async function openMic(){
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error("NO_MEDIA");
+  setAudioSession("play-and-record");
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  let source = null;
+  try { if (audioCtx && analyser) { source = audioCtx.createMediaStreamSource(stream); source.connect(analyser); } } catch (e) {}
+  mic = { stream, source };
   return stream;
 }
+function closeMic(){
+  if (!mic) return;
+  try { mic.source?.disconnect(); } catch (e) {}
+  mic.stream.getTracks().forEach(t => t.stop());
+  mic = null;
+  setAudioSession("auto");
+  if (meterEl) meterEl.style.width = "0";
+}
 function meterLoop(){
-  if (analyser && meterEl) {
+  if (analyser && meterEl && mic) {
     const buf = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(buf);
     let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
     meterEl.style.width = Math.min(100, peak / 64 * 100) + "%";
@@ -330,18 +356,29 @@ function meterLoop(){
   requestAnimationFrame(meterLoop);
 }
 function micErrorText(err){
-  if (err?.message === "NO_MEDIA") return "這個瀏覽器不能錄音。請改用 Chrome、Edge 或 Safari 開啟這個網址（LINE 裡面的瀏覽器常常不行）。";
-  if (err?.name === "NotAllowedError") return "麥克風被擋住了 😢 請點網址列旁邊的🔒或🎤圖示，把麥克風改成「允許」，再重新整理網頁。";
+  if (err?.message === "NO_MEDIA") {
+    return IS_IOS
+      ? "這個 App 裡不能錄音。請按右上角或右下角的「…／分享」→ 選「用 Safari 開啟」。（LINE、FB、IG 裡面的瀏覽器不能錄音）"
+      : "這個瀏覽器不能錄音。請改用 Chrome 或 Safari 開啟這個網址（LINE 裡面的瀏覽器常常不行）。";
+  }
+  if (err?.name === "NotAllowedError" || err?.name === "SecurityError") {
+    if (IS_IOS) return "麥克風被擋住了 😢 請到 iPad 的「設定」→「Safari」→「麥克風」改成「詢問」或「允許」（用 Chrome 的話：「設定」→「Chrome」→ 打開「麥克風」），然後回來重新整理網頁。";
+    if (IS_CHROMEOS) return "麥克風被擋住了 😢 請按網址列右邊的🎤（或左邊的🔒）→ 麥克風選「允許」，再重新整理網頁。如果是學校管理的 Chromebook 不能改，請找資訊老師開放這個網站使用麥克風。";
+    return "麥克風被擋住了 😢 請點網址列旁邊的🔒或🎤圖示，把麥克風改成「允許」，再重新整理網頁。";
+  }
   if (err?.name === "NotFoundError") return "找不到麥克風，請確認耳機或麥克風有插好。";
-  return "麥克風沒辦法啟動，請換一個瀏覽器或裝置再試一次。";
+  if (err?.name === "NotReadableError") return "麥克風正在被別的程式使用（例如視訊、Google Meet），請先關掉它們再試一次。";
+  return "麥克風沒辦法啟動，請重新整理網頁，或換一個瀏覽器／裝置再試一次。";
 }
 function pickMime(){
-  const list = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  // Safari 用 mp4 最穩定；其他瀏覽器用 webm
+  const list = IS_APPLE ? ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"]
+                        : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
   return list.find(t => window.MediaRecorder?.isTypeSupported?.(t)) || "";
 }
 const extOf = m => m.includes("mp4") ? "m4a" : m.includes("ogg") ? "ogg" : "webm";
 
-function startRecording(){
+function startRecording(stream){
   const mime = pickMime();
   const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
   const chunks = [], t0 = performance.now();
@@ -352,12 +389,13 @@ function startRecording(){
       resolve({ blob: new Blob(chunks, { type }), mime: type, ext: extOf(type), duration: Math.round((performance.now() - t0) / 100) / 10 });
     };
   });
-  rec.start(1000);
+  rec.start();                       // 不分段，錄完一次給完整檔案（Safari 比較穩定）
   return { stop(){ if (rec.state !== "inactive") rec.stop(); return done; } };
 }
 function beep(){
   return new Promise(res => {
     try {
+      if (!audioCtx) throw 0;
       audioCtx.resume?.();
       const o = audioCtx.createOscillator(), g = audioCtx.createGain();
       o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(audioCtx.destination);
@@ -374,11 +412,15 @@ async function toMp3(raw){
     const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const ab = await raw.blob.arrayBuffer();
     const decoded = await new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
-    const rate = 22050;                                   // 說話用 22kHz 單聲道就很清楚，檔案也小
-    const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-    const off = new Offline(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
-    const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start(0);
-    const pcm = (await off.startRendering()).getChannelData(0);
+    let rate = 22050, pcm;                                 // 說話用 22kHz 單聲道就很清楚，檔案也小
+    try {
+      const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      const off = new Offline(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
+      const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start(0);
+      pcm = (await off.startRendering()).getChannelData(0);
+    } catch (e) {                                          // 舊版 Safari 不能換取樣率 → 用原本的取樣率
+      rate = decoded.sampleRate; pcm = decoded.getChannelData(0);
+    }
     const enc = new lamejs.Mp3Encoder(1, rate, 64);
     const out = [], block = 1152, i16 = new Int16Array(block);
     for (let i = 0; i < pcm.length; i += block) {
@@ -415,7 +457,10 @@ let speechChain = 0;
 async function speak(text){
   const me = ++speechChain;
   const sentences = fill(text).split(/(?<=[.?!])\s+/).filter(Boolean);
-  if (hasTTS) speechSynthesis.cancel();
+  if (hasTTS && (speechSynthesis.speaking || speechSynthesis.pending)) {
+    speechSynthesis.cancel();
+    await new Promise(r => setTimeout(r, 120));          // Safari：取消後馬上說話會被吃掉
+  }
   for (const s of sentences) {
     if (me !== speechChain) break;          // 被停止或有新的語音開始了
     await speakOne(s);
@@ -443,7 +488,12 @@ function silentWav(){
   v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true); for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
   return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
 }
-function unlockAudio(){ qAudio.src = silentWav(); qAudio.play().catch(() => {}); }   // 讓 iPhone/iPad 之後能自動播放
+// 在學生按「開始測驗」的當下先解鎖聲音，iPad 之後才會自動播放題目
+function unlockAudio(){
+  ensureAudio();
+  qAudio.src = silentWav(); qAudio.play().catch(() => {});
+  if (hasTTS) { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u); }
+}
 function playUrl(url){
   return new Promise(resolve => {
     let fin = false;
@@ -466,18 +516,21 @@ function stopQuestion(){ speechChain++; if (hasTTS) speechSynthesis.cancel(); qA
 let micTested = false;
 $("btn-mic-test").onclick = async () => {
   $("mic-err").textContent = "";
-  try { await ensureStream(); } catch (err) { console.error(err); $("mic-err").textContent = micErrorText(err); return; }
-  audioCtx?.resume?.();
+  ensureAudio();
+  let stream;
+  try { stream = await openMic(); } catch (err) { console.error(err); $("mic-err").textContent = micErrorText(err); return; }
   meterEl = $("mic-meter");
   const btn = $("btn-mic-test"); btn.disabled = true;
-  const r = startRecording();
+  const r = startRecording(stream);
   for (let s = 3; s > 0; s--) { btn.textContent = `錄音中… ${s}`; await new Promise(res => setTimeout(res, 1000)); }
   const res = await r.stop();
+  closeMic();
   btn.disabled = false; btn.textContent = "🔴 再試錄一次";
   const a = $("mic-playback"); a.src = URL.createObjectURL(res.blob); a.classList.remove("hidden"); a.play().catch(() => {});
   micTested = true; $("btn-start").disabled = false;
 };
 $("btn-voice-test").onclick = () => {
+  ensureAudio();
   if (!hasTTS) { $("mic-err").textContent = "這個瀏覽器不能唸題目，題目會改成直接顯示在螢幕上。"; return; }
   speak("Hello! Welcome to the speaking test.");
 };
@@ -554,7 +607,7 @@ function renderItem(it, i){
   if (!it.text && !it.pics.length) {
     const l = document.createElement("div"); l.className = "listen-box"; l.textContent = "👂 請仔細聽題目"; body.appendChild(l);
   }
-  if (it.say && !it.text && (C.showQuestionText || (!hasTTS && !it.audio?.url))) {
+  if (it.say && !it.text && (C.showQuestionText || (!it.audio?.url && (!hasTTS || !voice)))) {
     const q = document.createElement("div"); q.className = "q-text"; q.textContent = fill(it.say); body.appendChild(q);
   }
   if (it.hint) { const h = document.createElement("div"); h.className = "hint"; h.textContent = "💡 " + it.hint; body.appendChild(h); }
@@ -582,13 +635,16 @@ async function runItem(it, i){
     }
     stopQuestion();
     if (it.cue) { setStage("listen", "請聽考官說…", "Listen."); await speak(it.cue); }
+    setStage("listen", "準備錄音…", "聽到「嗶」一聲就開始說。");
+    const stream = await openMicWithRetry();
     await beep();
     setStage("rec", '<span class="dot"></span>錄音中，請開始說', "說完可以按「我說完了」。");
     meterEl = $("rec-meter");
-    const rec = startRecording();
+    const rec = startRecording(stream);
     $("btn-stop").disabled = true; setTimeout(() => { $("btn-stop").disabled = false; }, 1500);
     await countdown(it.answer || 15, $("btn-stop"));
     const raw = await rec.stop();
+    closeMic();
     setStage("listen", "處理錄音中…", "請稍等一下。");
     results[it.id] = await toMp3(raw);
 
@@ -600,6 +656,20 @@ async function runItem(it, i){
     const choice = await waitClick(canRetry ? ["btn-next", "btn-retry"] : ["btn-next"]);
     $("review-audio").pause();
     if (choice === "btn-next") return;
+  }
+}
+/* 錄音前打開麥克風；失敗的話顯示原因，讓學生改好設定後再按一次 */
+async function openMicWithRetry(){
+  for (;;) {
+    try { return await openMic(); }
+    catch (err) {
+      console.error(err);
+      setStage("listen", "⚠️ 麥克風沒辦法啟動", micErrorText(err));
+      $("btn-mic-retry").classList.remove("hidden");
+      await waitClick(["btn-mic-retry"]);
+      $("btn-mic-retry").classList.add("hidden");
+      ensureAudio();
+    }
   }
 }
 async function showPartIntro(part){
@@ -618,7 +688,7 @@ async function runTest(){
     if (items[i].pi !== lastPart) { lastPart = items[i].pi; await showPartIntro(items[i].part); show("screen-item"); }
     await runItem(items[i], i);
   }
-  stream?.getTracks().forEach(t => t.stop());
+  closeMic();
   if (C.outro) speak(C.outro);
   await uploadAll();
 }
