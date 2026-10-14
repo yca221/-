@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEPT Kids 口說練習</title>
+<style>
+  :root{
+    --ink:#2B2A33; --muted:#7A7686; --line:#EFE7DA; --bg:#FFF8EE; --card:#fff;
+    --accent:#7C5CFF; --accent-soft:#EEE9FF; --rec:#FF5A5F; --ok:#20B486; --warn:#F5A524;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    color:var(--ink);background:var(--bg);min-height:100dvh;display:flex;flex-direction:column;
+    align-items:center;padding:20px 16px 48px;line-height:1.55}
+  .card{width:100%;max-width:640px;background:var(--card);border:1px solid var(--line);border-radius:22px;
+    box-shadow:0 14px 30px rgba(43,42,51,.08);padding:26px 22px}
+  h1{font-size:24px;margin:0 0 6px} h2{font-size:20px;margin:0 0 8px}
+  .sub{color:var(--muted);margin:0 0 4px;font-size:15px}
+  .badge{display:inline-block;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;
+    background:#FFF1D6;color:#A86B00;margin-top:10px}
+  .badge.online{background:#DDF6EC;color:#0E7A57}
+  .field{margin-top:16px}
+  .field label{display:block;font-weight:700;font-size:15px;margin-bottom:6px}
+  .field input{width:100%;font-size:18px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;outline:none;background:#fff}
+  .field input:focus{border-color:var(--accent)}
+  .row{display:flex;gap:12px} .row>.field{flex:1}
+  .btn{display:block;width:100%;margin-top:18px;border:none;cursor:pointer;font-weight:800;font-size:18px;color:#fff;
+    background:var(--accent);padding:15px;border-radius:16px;font-family:inherit}
+  .btn:disabled{background:#D9D3C8;cursor:not-allowed}
+  .btn.ghost{background:var(--accent-soft);color:var(--accent)}
+  .btn.red{background:var(--rec)} .btn.green{background:var(--ok)}
+  .btns{display:flex;gap:10px} .btns .btn{flex:1}
+  .err{color:var(--rec);font-size:15px;margin-top:10px;min-height:20px;font-weight:600}
+  .hidden{display:none!important}
+  .tips{background:var(--accent-soft);border-radius:14px;padding:12px 16px;margin-top:14px;font-size:15px}
+  .tips ol,.tips ul{margin:6px 0 0;padding-left:22px}
+
+  /* 音量條 */
+  .meter{height:14px;border-radius:999px;background:#F1ECE3;overflow:hidden;margin-top:14px}
+  .meter>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#20B486,#F5A524,#FF5A5F);transition:width .08s}
+
+  /* 題目畫面 */
+  .top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;color:var(--muted);font-weight:700}
+  .pips{display:flex;gap:4px;flex-wrap:wrap;margin:10px 0 16px}
+  .pip{flex:1;min-width:10px;height:8px;border-radius:999px;background:#EFE7DA}
+  .pip.done{background:var(--ok)} .pip.active{background:var(--accent)}
+  .part-name{font-weight:800;color:var(--accent);font-size:15px}
+  .prompt-text{font-size:28px;font-weight:800;text-align:center;padding:22px 12px;border:3px dashed var(--line);
+    border-radius:18px;margin:6px 0 4px;line-height:1.4;word-break:break-word}
+  .listen-box{font-size:20px;font-weight:700;text-align:center;padding:26px 12px;border-radius:18px;background:#F7F3EC;color:var(--muted)}
+  .q-text{font-size:20px;font-weight:700;text-align:center;margin:10px 0 0}
+  .hint{text-align:center;color:var(--muted);font-size:15px;margin-top:10px}
+
+  .pic{position:relative;width:100%;aspect-ratio:4/3;border-radius:16px;overflow:hidden;container-type:inline-size;border:2px solid var(--line)}
+  .pic .emo{position:absolute;transform:translate(-50%,-50%);line-height:1;user-select:none}
+  .pic img{width:100%;height:100%;object-fit:contain;background:#fff}
+  .pic .missing{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;padding:10px;text-align:center}
+  .story{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .story .num{position:absolute;left:6px;top:6px;background:var(--ink);color:#fff;font-weight:800;font-size:14px;
+    width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:1}
+
+  .stage{display:flex;align-items:center;gap:16px;margin-top:18px;padding:14px 16px;border-radius:18px;background:#F7F3EC}
+  .stage.rec{background:#FFE9EA} .stage.prep{background:#FFF4DE} .stage.review{background:#E5F7EF}
+  .ring{position:relative;width:72px;height:72px;flex:none}
+  .ring svg{width:72px;height:72px;transform:rotate(-90deg)}
+  .ring circle{fill:none;stroke-width:8}
+  .ring .bgc{stroke:rgba(0,0,0,.08)} .ring .fgc{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .1s linear}
+  .stage.rec .ring .fgc{stroke:var(--rec)} .stage.prep .ring .fgc{stroke:var(--warn)}
+  .ring b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:24px}
+  .stage-label{font-size:19px;font-weight:800} .stage-sub{font-size:14px;color:var(--muted)}
+  .dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--rec);margin-right:6px;animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  audio{width:100%;margin-top:12px}
+
+  /* 上傳畫面 */
+  .up-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+  .stat{font-weight:700;white-space:nowrap} .stat.ok{color:var(--ok)} .stat.wait{color:var(--muted)} .stat.fail{color:var(--rec)} .stat.busy{color:var(--accent)}
+  .dl-list a{display:block;margin-top:8px;color:var(--accent);font-weight:700;text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .big-emoji{font-size:64px;text-align:center;line-height:1.2}
+  @media (max-width:420px){ .prompt-text{font-size:23px} .card{padding:22px 16px} }
+</style>
+</head>
+<body>
+
+<!-- ================= 畫面 1：基本資料 ================= -->
+<section class="card" id="screen-welcome">
+  <div class="big-emoji">🎤</div>
+  <h1 id="app-title">GEPT Kids 口說練習</h1>
+  <p class="sub">請先填好你的資料，再開始測驗。</p>
+  <span class="badge" id="mode-badge"></span>
+  <div class="row">
+    <div class="field"><label for="in-class">班級</label><input id="in-class" type="text" placeholder="例如：501" autocomplete="off"></div>
+    <div class="field"><label for="in-seat">座號</label><input id="in-seat" type="text" inputmode="numeric" placeholder="例如：7" autocomplete="off"></div>
+  </div>
+  <div class="field"><label for="in-name">姓名</label><input id="in-name" type="text" placeholder="例如：王小明" autocomplete="off"></div>
+  <div class="tips">
+    <b>開始之前：</b>
+    <ul>
+      <li>找一個安靜的地方，戴耳機會更好。</li>
+      <li>瀏覽器問「要不要使用麥克風」時，請按 <b>允許</b>。</li>
+      <li>測驗大約 10 分鐘，中途不要關掉或重新整理網頁。</li>
+    </ul>
+  </div>
+  <div class="err" id="welcome-err"></div>
+  <button class="btn" id="btn-to-mic">下一步：測試麥克風 →</button>
+</section>
+
+<!-- ================= 畫面 2：麥克風測試 ================= -->
+<section class="card hidden" id="screen-mic">
+  <h2>🎧 測試麥克風和喇叭</h2>
+  <p class="sub">按下「試錄 3 秒」，然後用英文說：<b>"Hello, I am ready."</b></p>
+  <div class="meter"><i id="mic-meter"></i></div>
+  <p class="sub" style="margin-top:6px">說話時上面的彩色條會動，代表麥克風有收到聲音。</p>
+  <button class="btn ghost" id="btn-mic-test">🔴 試錄 3 秒</button>
+  <audio id="mic-playback" controls class="hidden"></audio>
+  <button class="btn ghost" id="btn-voice-test">🔊 聽聽看電腦考官的聲音</button>
+  <div class="err" id="mic-err"></div>
+  <button class="btn green" id="btn-start" disabled>聲音都正常，開始測驗 →</button>
+</section>
+
+<!-- ================= 畫面 3：每個部分的說明 ================= -->
+<section class="card hidden" id="screen-part">
+  <div class="part-name" id="part-en"></div>
+  <h2 id="part-title"></h2>
+  <div class="tips" id="part-intro" style="font-size:17px"></div>
+  <button class="btn" id="btn-part-go">我知道了，開始 →</button>
+</section>
+
+<!-- ================= 畫面 4：作答 ================= -->
+<section class="card hidden" id="screen-item">
+  <div class="top"><span class="part-name" id="item-part"></span><span id="item-count"></span></div>
+  <div class="pips" id="pips"></div>
+  <div id="item-body"></div>
+
+  <div class="stage" id="stage">
+    <div class="ring"><svg viewBox="0 0 80 80"><circle class="bgc" cx="40" cy="40" r="34"/><circle class="fgc" id="ring-fg" cx="40" cy="40" r="34" stroke-dasharray="213.6" stroke-dashoffset="0"/></svg><b id="ring-num"></b></div>
+    <div style="flex:1;min-width:0">
+      <div class="stage-label" id="stage-label"></div>
+      <div class="stage-sub" id="stage-sub"></div>
+      <div class="meter hidden" id="rec-meter-wrap"><i id="rec-meter"></i></div>
+    </div>
+  </div>
+
+  <div id="ctl-prep" class="btns hidden">
+    <button class="btn ghost" id="btn-replay">🔊 再聽一次</button>
+    <button class="btn" id="btn-skip-prep">準備好了 →</button>
+  </div>
+  <div id="ctl-rec" class="hidden">
+    <button class="btn red" id="btn-stop">⏹ 我說完了</button>
+  </div>
+  <div id="ctl-review" class="hidden">
+    <audio id="review-audio" controls></audio>
+    <div class="btns">
+      <button class="btn ghost" id="btn-retry">↺ 重錄這題</button>
+      <button class="btn green" id="btn-next">下一題 →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 畫面 5：上傳 / 完成 ================= -->
+<section class="card hidden" id="screen-upload">
+  <div class="big-emoji" id="up-emoji">📤</div>
+  <h2 id="up-title">正在上傳錄音…</h2>
+  <p class="sub" id="up-desc">請不要關掉視窗。</p>
+  <div id="up-list" style="margin-top:12px"></div>
+  <div class="err" id="up-err"></div>
+  <button class="btn hidden" id="btn-up-retry">↻ 再試一次上傳</button>
+  <div class="dl-list hidden" id="dl-list"></div>
+</section>
+
+<script src="config.js"></script>
+<script src="questions.js"></script>
+<script type="module">
+const $ = id => document.getElementById(id);
+const C = window.TEST_CONFIG || {};
+const PARTS = window.TEST_PARTS || [];
+const PICS = window.TEST_PICTURES || {};
+const FB = window.FIREBASE_CONFIG || {};
+const FIREBASE_VER = "10.12.2";
+// 開發測試用：網址加 ?speed=10 會讓倒數快 10 倍（正式使用不要加）
+const SPEED = Math.max(1, Number(new URLSearchParams(location.search).get("speed")) || 1);
+
+const firebaseReady = () => !!FB.apiKey && !String(FB.apiKey).startsWith("PASTE");
+const items = PARTS.flatMap((part, pi) => part.items.map(it => ({ ...it, part, pi })));
+const results = {};          // 題目 id → { blob, mime, ext, duration }
+const student = {};
+let startedAt = null, testing = false;
+
+$("app-title").textContent = C.title || "GEPT Kids 口說練習";
+document.title = C.title || document.title;
+$("mode-badge").textContent = firebaseReady() ? "✅ 已連線，錄音會自動交給老師" : "🧪 本機測試模式（尚未連接後台，錄音不會上傳）";
+$("mode-badge").classList.toggle("online", firebaseReady());
+
+function show(id){
+  for (const s of document.querySelectorAll("section.card")) s.classList.toggle("hidden", s.id !== id);
+  window.scrollTo({ top: 0 });
+}
+window.addEventListener("beforeunload", e => { if (testing) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ---------------- 畫面 1：基本資料 ---------------- */
+$("btn-to-mic").onclick = () => {
+  const className = $("in-class").value.trim(), seat = $("in-seat").value.trim(), name = $("in-name").value.trim();
+  if (!className || !seat || !name) { $("welcome-err").textContent = "請把班級、座號、姓名都填好喔！"; return; }
+  Object.assign(student, { className, seat, name });
+  show("screen-mic");
+};
+
+/* ---------------- 麥克風 / 錄音 ---------------- */
+let stream = null, audioCtx = null, analyser = null, meterEl = null;
+
+async function ensureStream(){
+  if (stream) return stream;
+  if (!navigator.mediaDevices?.getUserMedia) throw new Error("NO_MEDIA");
+  stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 512;
+    audioCtx.createMediaStreamSource(stream).connect(analyser);
+    requestAnimationFrame(meterLoop);
+  } catch (e) { console.warn("音量條無法使用", e); }
+  return stream;
+}
+function meterLoop(){
+  if (analyser && meterEl) {
+    const buf = new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(buf);
+    let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v - 128));
+    meterEl.style.width = Math.min(100, peak / 64 * 100) + "%";
+  }
+  requestAnimationFrame(meterLoop);
+}
+function micErrorText(err){
+  if (err?.message === "NO_MEDIA") return "這個瀏覽器不能錄音。請改用 Chrome、Edge 或 Safari 開啟這個網址（LINE 裡面的瀏覽器常常不行）。";
+  if (err?.name === "NotAllowedError") return "麥克風被擋住了 😢 請點網址列旁邊的🔒或🎤圖示，把麥克風改成「允許」，再重新整理網頁。";
+  if (err?.name === "NotFoundError") return "找不到麥克風，請確認耳機或麥克風有插好。";
+  return "麥克風沒辦法啟動，請換一個瀏覽器或裝置再試一次。";
+}
+function pickMime(){
+  const list = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  return list.find(t => window.MediaRecorder?.isTypeSupported?.(t)) || "";
+}
+const extOf = m => m.includes("mp4") ? "m4a" : m.includes("ogg") ? "ogg" : "webm";
+
+function startRecording(){
+  const mime = pickMime();
+  const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  const chunks = [], t0 = performance.now();
+  rec.ondataavailable = e => { if (e.data?.size) chunks.push(e.data); };
+  const done = new Promise(resolve => {
+    rec.onstop = () => {
+      const type = rec.mimeType || mime || "audio/webm";
+      resolve({ blob: new Blob(chunks, { type }), mime: type, ext: extOf(type), duration: Math.round((performance.now() - t0) / 100) / 10 });
+    };
+  });
+  rec.start(1000);
+  return { stop(){ if (rec.state !== "inactive") rec.stop(); return done; } };
+}
+function beep(){
+  return new Promise(res => {
+    try {
+      audioCtx.resume?.();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.25);
+    } catch (e) {}
+    setTimeout(res, 350);
+  });
+}
+
+/* ---------------- 電腦考官的聲音（瀏覽器內建語音） ---------------- */
+const hasTTS = "speechSynthesis" in window;
+let voice = null;
+function loadVoice(){
+  if (!hasTTS) return;
+  const vs = speechSynthesis.getVoices();
+  voice = vs.find(v => /^en[-_]US/i.test(v.lang) && /samantha|google us|aria|jenny|female/i.test(v.name))
+       || vs.find(v => /^en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
+}
+if (hasTTS) { loadVoice(); speechSynthesis.onvoiceschanged = loadVoice; }
+function speak(text){
+  return new Promise(resolve => {
+    if (!hasTTS || !text) return resolve();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US"; if (voice) u.voice = voice; u.rate = C.voiceRate || 0.85;
+    let fin = false;
+    const end = () => { if (!fin) { fin = true; clearTimeout(guard); resolve(); } };
+    // 有些瀏覽器不會觸發 onend，所以加一個保險計時器
+    const guard = setTimeout(end, (1500 + text.length * 110 / u.rate) / SPEED);
+    u.onend = end; u.onerror = end;
+    speechSynthesis.speak(u);
+  });
+}
+
+/* ---------------- 畫面 2：麥克風測試 ---------------- */
+let micTested = false;
+$("btn-mic-test").onclick = async () => {
+  $("mic-err").textContent = "";
+  try { await ensureStream(); } catch (err) { console.error(err); $("mic-err").textContent = micErrorText(err); return; }
+  audioCtx?.resume?.();
+  meterEl = $("mic-meter");
+  const btn = $("btn-mic-test"); btn.disabled = true;
+  const r = startRecording();
+  for (let s = 3; s > 0; s--) { btn.textContent = `錄音中… ${s}`; await new Promise(res => setTimeout(res, 1000)); }
+  const res = await r.stop();
+  btn.disabled = false; btn.textContent = "🔴 再試錄一次";
+  const a = $("mic-playback"); a.src = URL.createObjectURL(res.blob); a.classList.remove("hidden"); a.play().catch(() => {});
+  micTested = true; $("btn-start").disabled = false;
+};
+$("btn-voice-test").onclick = () => {
+  if (!hasTTS) { $("mic-err").textContent = "這個瀏覽器不能唸題目，題目會改成直接顯示在螢幕上。"; return; }
+  speak("Hello! Welcome to the speaking test.");
+};
+$("btn-start").onclick = () => { if (micTested) runTest(); };
+
+/* ---------------- 圖片 ---------------- */
+function renderPicture(key){
+  const p = typeof key === "string" ? PICS[key] : key;
+  const box = document.createElement("div"); box.className = "pic";
+  if (!p) { box.innerHTML = `<div class="missing">找不到圖片「${String(key)}」</div>`; return box; }
+  if (p.src) {
+    const img = document.createElement("img"); img.src = p.src; img.alt = "";
+    img.onerror = () => { box.innerHTML = `<div class="missing">圖片載入失敗：${p.src}<br>請確認檔名和資料夾是否正確</div>`; };
+    box.appendChild(img); return box;
+  }
+  box.style.background = p.bg || "#EAF6FF";
+  for (const o of p.items || []) {
+    const s = document.createElement("span"); s.className = "emo"; s.textContent = o.e;
+    s.style.left = o.x + "%"; s.style.top = o.y + "%"; s.style.fontSize = (o.s || 12) + "cqw";
+    box.appendChild(s);
+  }
+  return box;
+}
+
+/* ---------------- 作答流程 ---------------- */
+function countdown(sec, skipBtn){
+  return new Promise(resolve => {
+    const total = sec * 1000 / SPEED, t0 = performance.now();
+    let done = false;
+    const finish = () => { if (done) return; done = true; clearInterval(iv); if (skipBtn) skipBtn.onclick = null; resolve(); };
+    const tick = () => {
+      const left = Math.max(0, total - (performance.now() - t0));
+      $("ring-num").textContent = Math.ceil(left * SPEED / 1000);
+      $("ring-fg").style.strokeDashoffset = String(213.6 * (1 - left / total));
+      if (left <= 0) finish();
+    };
+    const iv = setInterval(tick, 100); tick();
+    if (skipBtn) skipBtn.onclick = finish;
+  });
+}
+function setStage(kind, label, sub){
+  $("stage").className = "stage " + kind;
+  $("stage-label").innerHTML = label; $("stage-sub").textContent = sub || "";
+  $("ctl-prep").classList.toggle("hidden", kind !== "prep");
+  $("ctl-rec").classList.toggle("hidden", kind !== "rec");
+  $("ctl-review").classList.toggle("hidden", kind !== "review");
+  $("rec-meter-wrap").classList.toggle("hidden", kind !== "rec");
+  if (kind === "listen" || kind === "review") { $("ring-num").textContent = kind === "listen" ? "👂" : "✓"; $("ring-fg").style.strokeDashoffset = "0"; }
+}
+function renderItem(it, i){
+  $("item-part").textContent = it.part.titleEn || it.part.title;
+  $("item-count").textContent = `第 ${i + 1} / ${items.length} 題`;
+  $("pips").innerHTML = items.map((_, k) => `<span class="pip ${k < i ? "done" : k === i ? "active" : ""}"></span>`).join("");
+  const body = $("item-body"); body.innerHTML = "";
+  if (it.text) {
+    const t = document.createElement("div"); t.className = "prompt-text"; t.textContent = it.text; body.appendChild(t);
+  }
+  if (it.picture) body.appendChild(renderPicture(it.picture));
+  if (it.pictures) {
+    const g = document.createElement("div"); g.className = "story";
+    it.pictures.forEach((k, n) => { const p = renderPicture(k); const b = document.createElement("span"); b.className = "num"; b.textContent = n + 1; p.prepend(b); g.appendChild(p); });
+    body.appendChild(g);
+  }
+  if (!it.text && !it.picture && !it.pictures) {
+    const l = document.createElement("div"); l.className = "listen-box"; l.textContent = "👂 請仔細聽題目"; body.appendChild(l);
+  }
+  if (it.say && (C.showQuestionText || !hasTTS) && !it.text) {
+    const q = document.createElement("div"); q.className = "q-text"; q.textContent = it.say; body.appendChild(q);
+  }
+  if (it.hint) { const h = document.createElement("div"); h.className = "hint"; h.textContent = "💡 " + it.hint; body.appendChild(h); }
+}
+function waitClick(ids){
+  return new Promise(resolve => {
+    const off = () => ids.forEach(id => { $(id).onclick = null; });
+    ids.forEach(id => { $(id).onclick = () => { off(); resolve(id); }; });
+  });
+}
+async function runItem(it, i){
+  renderItem(it, i);
+  for (let attempt = 0; ; attempt++) {
+    setStage("listen", "請聽題目…", "Listen.");
+    await speak(it.say);
+    if (it.prep > 0) {
+      setStage("prep", "準備時間", "想一想要怎麼說，時間到會「嗶」一聲。");
+      let replays = C.allowReplay && hasTTS ? 1 : 0;
+      $("btn-replay").classList.toggle("hidden", !replays || !it.say);
+      $("btn-replay").onclick = () => { if (replays-- > 0) speak(it.say); $("btn-replay").classList.add("hidden"); };
+      await countdown(it.prep, $("btn-skip-prep"));
+      if (hasTTS) speechSynthesis.cancel();
+    }
+    await beep();
+    setStage("rec", '<span class="dot"></span>錄音中，請開始說', "說完可以按「我說完了」。");
+    meterEl = $("rec-meter");
+    const rec = startRecording();
+    $("btn-stop").disabled = true; setTimeout(() => { $("btn-stop").disabled = false; }, 1500);
+    await countdown(it.answer, $("btn-stop"));
+    results[it.id] = await rec.stop();
+
+    const canRetry = attempt < (C.maxRetries ?? 0);
+    setStage("review", "這題錄好了！", canRetry ? "可以先聽聽看，不滿意可以重錄一次。" : "可以先聽聽看，然後按下一題。");
+    $("btn-retry").classList.toggle("hidden", !canRetry);
+    $("review-audio").src = URL.createObjectURL(results[it.id].blob);
+    $("btn-next").textContent = i === items.length - 1 ? "完成，交卷 ✓" : "下一題 →";
+    const choice = await waitClick(canRetry ? ["btn-next", "btn-retry"] : ["btn-next"]);
+    $("review-audio").pause();
+    if (choice === "btn-next") return;
+  }
+}
+async function showPartIntro(part){
+  $("part-en").textContent = part.titleEn || "";
+  $("part-title").textContent = part.title;
+  $("part-intro").textContent = part.intro || "";
+  show("screen-part");
+  await waitClick(["btn-part-go"]);
+}
+async function runTest(){
+  testing = true; startedAt = new Date().toISOString();
+  let lastPart = -1;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].pi !== lastPart) { lastPart = items[i].pi; await showPartIntro(items[i].part); show("screen-item"); }
+    await runItem(items[i], i);
+  }
+  stream?.getTracks().forEach(t => t.stop());
+  await uploadAll();
+}
+
+/* ---------------- 上傳到 Firebase ---------------- */
+const uploaded = {};          // 題目 id → Storage 路徑（重試時跳過已上傳的）
+let docSaved = false;
+const safe = s => String(s).replace(/[\/\\#?\[\]*.:"<>|]/g, "_").trim().slice(0, 40) || "_";
+function stamp(d = new Date()){
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+const folder = () => `recordings/${safe(C.testId || "test")}/${safe(student.className)}/${student.stamp}_${safe(student.seat)}_${safe(student.name)}`;
+
+function buildRows(){
+  $("up-list").innerHTML = "";
+  items.forEach((it, i) => {
+    const row = document.createElement("div"); row.className = "up-row";
+    const label = document.createElement("span"); label.textContent = `第 ${i + 1} 題（${it.part.title.split("：")[0]}）`;
+    const st = document.createElement("span"); st.className = "stat wait"; st.id = "st-" + it.id; st.textContent = uploaded[it.id] ? "✓ 完成" : "等待中";
+    if (uploaded[it.id]) st.className = "stat ok";
+    row.append(label, st); $("up-list").appendChild(row);
+  });
+}
+function setRow(id, cls, text){ const el = $("st-" + id); if (el) { el.className = "stat " + cls; el.textContent = text; } }
+
+async function uploadAll(){
+  show("screen-upload");
+  student.stamp ||= stamp();
+  $("up-err").textContent = ""; $("btn-up-retry").classList.add("hidden");
+  if (!firebaseReady()) { testing = false; return showLocalFallback(false); }
+  $("up-emoji").textContent = "📤"; $("up-title").textContent = "正在把錄音交給老師…"; $("up-desc").textContent = "請不要關掉視窗。";
+  buildRows();
+  try {
+    const [{ initializeApp, getApps }, { getStorage, ref, uploadBytes }, { getFirestore, collection, addDoc, serverTimestamp }] = await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-app.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-storage.js`),
+      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`),
+    ]);
+    const app = getApps()[0] || initializeApp(FB);
+    const storage = getStorage(app), db = getFirestore(app);
+
+    for (const it of items) {
+      const r = results[it.id];
+      if (!r) { setRow(it.id, "fail", "沒有錄到"); continue; }
+      if (uploaded[it.id]) continue;
+      setRow(it.id, "busy", "上傳中…");
+      const path = `${folder()}/${it.id}.${r.ext}`;
+      await uploadBytes(ref(storage, path), r.blob, { contentType: r.mime });
+      uploaded[it.id] = path;
+      setRow(it.id, "ok", "✓ 完成");
+    }
+    if (!docSaved) {
+      await addDoc(collection(db, "submissions"), {
+        testId: C.testId || "test",
+        className: student.className, seat: student.seat, name: student.name,
+        folder: folder(),
+        startedAt, finishedAt: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        userAgent: navigator.userAgent.slice(0, 300),
+        items: items.filter(it => uploaded[it.id]).map(it => ({
+          id: it.id, part: it.part.title, say: it.say || "", text: it.text || "",
+          path: uploaded[it.id], mime: results[it.id].mime, duration: results[it.id].duration,
+        })),
+      });
+      docSaved = true;
+    }
+    testing = false;
+    $("up-emoji").textContent = "🎉"; $("up-title").textContent = "完成！錄音已經交給老師了";
+    $("up-desc").textContent = `${student.className} 班 ${student.seat} 號 ${student.name}，你好棒！可以關掉這個網頁了。`;
+  } catch (err) {
+    console.error(err);
+    $("up-emoji").textContent = "⚠️"; $("up-title").textContent = "上傳沒有成功";
+    $("up-desc").textContent = "可能是網路不穩。請先按「再試一次上傳」；如果還是不行，請把下面的錄音檔下載下來交給老師。";
+    $("up-err").textContent = "（錯誤訊息：" + (err?.code || err?.message || err) + "）";
+    $("btn-up-retry").classList.remove("hidden");
+    showLocalFallback(true);
+  }
+}
+$("btn-up-retry").onclick = () => uploadAll();
+
+/* ---------------- 本機備援：沒有後台或上傳失敗時，讓學生自己下載 ---------------- */
+function showLocalFallback(afterError){
+  if (!afterError) {
+    $("up-emoji").textContent = "🧪"; $("up-title").textContent = "完成（本機測試模式）";
+    $("up-desc").textContent = "目前還沒有連接後台，錄音沒有上傳。可以點下面的連結下載或試聽：";
+    $("up-list").innerHTML = "";
+  }
+  const list = $("dl-list"); list.innerHTML = ""; list.classList.remove("hidden");
+  items.forEach((it, i) => {
+    const r = results[it.id]; if (!r) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(r.blob);
+    a.download = `${safe(student.className)}_${safe(student.seat)}_${safe(student.name)}_${it.id}.${r.ext}`;
+    a.textContent = `⬇️ 第 ${i + 1} 題錄音（${r.duration} 秒）`;
+    list.appendChild(a);
+  });
+}
+</script>
+</body>
+</html>

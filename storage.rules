@@ -1,0 +1,20 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ⚠️ 把下面的 Email 換成老師的 Google 帳號（要跟 config.js 的 TEACHER_EMAILS 一樣）
+    function isTeacher() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['PASTE_TEACHER_EMAIL@gmail.com'];
+    }
+
+    match /recordings/{allPaths=**} {
+      // 學生：只能上傳「新的」錄音檔（10MB 以內、必須是音訊），不能覆蓋或下載
+      allow create: if request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('(audio|video)/.*');
+      // 老師：可以聽、下載、刪除
+      allow read, delete: if isTeacher();
+    }
+  }
+}

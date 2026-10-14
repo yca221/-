@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>口說練習・老師後台</title>
+<style>
+  :root{ --ink:#2B2A33; --muted:#7A7686; --line:#EFE7DA; --bg:#F6F4F0; --accent:#7C5CFF; --accent-soft:#EEE9FF; --ok:#20B486; --bad:#FF5A5F; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:2}
+  header h1{font-size:19px;margin:0;flex:1;min-width:180px}
+  main{max-width:900px;margin:0 auto;padding:16px}
+  .btn{border:none;cursor:pointer;font-weight:700;font-size:15px;color:#fff;background:var(--accent);padding:10px 16px;border-radius:12px;font-family:inherit}
+  .btn.ghost{background:var(--accent-soft);color:var(--accent)}
+  .box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;margin-top:14px}
+  .muted{color:var(--muted)} .err{color:var(--bad);font-weight:600}
+  .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .filters select,.filters input{font-size:15px;padding:9px 12px;border:2px solid var(--line);border-radius:10px;background:#fff;font-family:inherit}
+  .filters input{flex:1;min-width:140px}
+  details.sub{background:#fff;border:1px solid var(--line);border-radius:14px;margin-top:10px}
+  details.sub>summary{cursor:pointer;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;list-style:none}
+  details.sub>summary::-webkit-details-marker{display:none}
+  details.sub[open]>summary{border-bottom:1px solid var(--line)}
+  .who{font-weight:800;font-size:16px} .when{color:var(--muted);font-size:14px;margin-left:auto}
+  .tag{font-size:12px;font-weight:700;background:var(--accent-soft);color:var(--accent);padding:2px 8px;border-radius:999px}
+  .items{padding:6px 16px 14px}
+  .it{padding:10px 0;border-bottom:1px dashed var(--line)}
+  .it:last-child{border-bottom:none}
+  .it .q{font-size:14px} .it .q b{color:var(--accent)}
+  .it audio{width:100%;margin-top:6px;height:40px}
+  .it a{font-size:13px;color:var(--accent)}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎤 口說練習・老師後台</h1>
+  <span class="muted" id="who"></span>
+  <button class="btn ghost hidden" id="btn-logout">登出</button>
+</header>
+<main>
+  <div class="box" id="login-box">
+    <p>請用老師的 Google 帳號登入，才能看到學生的錄音。</p>
+    <button class="btn" id="btn-login">用 Google 帳號登入</button>
+    <p class="err" id="login-err"></p>
+  </div>
+
+  <div id="list-box" class="hidden">
+    <div class="box filters">
+      <select id="f-test"></select>
+      <select id="f-class"></select>
+      <input id="f-name" type="search" placeholder="搜尋姓名或座號">
+      <button class="btn ghost" id="btn-reload">↻ 重新整理</button>
+    </div>
+    <p class="muted" id="count"></p>
+    <div id="list"></div>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script type="module">
+const $ = id => document.getElementById(id);
+const FB = window.FIREBASE_CONFIG || {};
+const TEACHERS = (window.TEACHER_EMAILS || []).map(e => e.toLowerCase());
+const V = "10.12.2";
+
+if (!FB.apiKey || String(FB.apiKey).startsWith("PASTE")) {
+  $("login-box").innerHTML = '<p class="err">還沒設定 Firebase。</p><p>請先打開 <b>config.js</b>，把你 Firebase 專案的設定貼進去。</p>';
+  throw new Error("Firebase 尚未設定");
+}
+
+const [{ initializeApp }, A, F, S] = await Promise.all([
+  import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),
+  import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),
+  import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`),
+  import(`https://www.gstatic.com/firebasejs/${V}/firebase-storage.js`),
+]);
+const app = initializeApp(FB);
+const auth = A.getAuth(app), db = F.getFirestore(app), storage = S.getStorage(app);
+
+let all = [];
+
+$("btn-login").onclick = async () => {
+  $("login-err").textContent = "";
+  try { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); }
+  catch (err) {
+    console.error(err);
+    $("login-err").textContent = err.code === "auth/unauthorized-domain"
+      ? "這個網址還沒加入 Firebase 的「授權網域」。請到 Firebase → Authentication → 設定 → 授權網域，把目前網址的網域加進去。"
+      : err.code === "auth/operation-not-allowed"
+      ? "Firebase 還沒開啟 Google 登入。請到 Authentication → 登入方式，啟用 Google。"
+      : "登入失敗：" + (err.code || err.message);
+  }
+};
+$("btn-logout").onclick = () => A.signOut(auth);
+
+A.onAuthStateChanged(auth, user => {
+  $("btn-logout").classList.toggle("hidden", !user);
+  $("who").textContent = user ? user.email : "";
+  if (!user) { $("login-box").classList.remove("hidden"); $("list-box").classList.add("hidden"); return; }
+  if (!TEACHERS.includes((user.email || "").toLowerCase())) {
+    $("login-box").classList.remove("hidden"); $("list-box").classList.add("hidden");
+    $("login-err").textContent = `${user.email} 不是老師帳號。請在 config.js 的 TEACHER_EMAILS 和安全規則裡加入這個 Email。`;
+    return;
+  }
+  $("login-box").classList.add("hidden"); $("list-box").classList.remove("hidden");
+  load();
+});
+
+async function load(){
+  $("count").textContent = "讀取中…"; $("list").innerHTML = "";
+  try {
+    const q = F.query(F.collection(db, "submissions"), F.orderBy("createdAt", "desc"), F.limit(500));
+    const snap = await F.getDocs(q);
+    all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    fillSelect("f-test", "全部測驗", all.map(s => s.testId));
+    fillSelect("f-class", "全部班級", all.map(s => s.className));
+    render();
+  } catch (err) {
+    console.error(err);
+    $("count").innerHTML = `<span class="err">讀不到資料（${err.code || err.message}）。如果是 permission-denied，請確認 Firestore 安全規則裡的老師 Email 是否正確。</span>`;
+  }
+}
+function fillSelect(id, allLabel, values){
+  const el = $(id), cur = el.value;
+  el.innerHTML = "";
+  el.append(new Option(allLabel, ""));
+  [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "zh-Hant", { numeric: true }))
+    .forEach(v => el.append(new Option(v, v)));
+  el.value = [...el.options].some(o => o.value === cur) ? cur : "";
+}
+["f-test", "f-class"].forEach(id => $(id).onchange = render);
+$("f-name").oninput = render;
+$("btn-reload").onclick = load;
+
+function render(){
+  const t = $("f-test").value, c = $("f-class").value, n = $("f-name").value.trim().toLowerCase();
+  const rows = all.filter(s => (!t || s.testId === t) && (!c || s.className === c)
+    && (!n || `${s.name} ${s.seat}`.toLowerCase().includes(n)));
+  $("count").textContent = `共 ${rows.length} 份作答（點一下姓名就能聽錄音）`;
+  const list = $("list"); list.innerHTML = "";
+  for (const s of rows) {
+    const d = document.createElement("details"); d.className = "sub";
+    const sum = document.createElement("summary");
+    const who = document.createElement("span"); who.className = "who"; who.textContent = `${s.className} 班 ${s.seat} 號 ${s.name}`;
+    const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = `${(s.items || []).length} 題`;
+    const when = document.createElement("span"); when.className = "when";
+    const dt = s.createdAt?.toDate?.() || (s.finishedAt ? new Date(s.finishedAt) : null);
+    when.textContent = dt ? dt.toLocaleString("zh-TW", { hour12: false }) : "";
+    sum.append(who, tag, when);
+    const body = document.createElement("div"); body.className = "items";
+    d.append(sum, body);
+    d.addEventListener("toggle", () => { if (d.open && !body.dataset.loaded) { body.dataset.loaded = "1"; loadAudios(s, body); } });
+    list.appendChild(d);
+  }
+}
+async function loadAudios(s, body){
+  for (const [i, it] of (s.items || []).entries()) {
+    const row = document.createElement("div"); row.className = "it";
+    const q = document.createElement("div"); q.className = "q";
+    const b = document.createElement("b"); b.textContent = `${i + 1}. ${it.part || it.id}　`;
+    q.append(b, document.createTextNode(it.text ? `朗讀：${it.text}` : (it.say || "")));
+    if (it.duration) q.append(document.createTextNode(`（${it.duration} 秒）`));
+    row.appendChild(q);
+    body.appendChild(row);
+    try {
+      const url = await S.getDownloadURL(S.ref(storage, it.path));
+      const au = document.createElement("audio"); au.controls = true; au.preload = "none"; au.src = url;
+      const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "在新分頁開啟 / 下載";
+      row.append(au, a);
+    } catch (err) {
+      const e = document.createElement("div"); e.className = "err"; e.textContent = `讀不到這個錄音（${err.code || err.message}）`;
+      row.appendChild(e);
+    }
+  }
+}
+</script>
+</body>
+</html>
