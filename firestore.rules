@@ -3,19 +3,28 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ⚠️ 把下面的 Email 換成老師的 Google 帳號（要跟 config.js 的 TEACHER_EMAILS 一樣）
+    //    多位老師就寫成 ['a@gmail.com', 'b@gmail.com']
     function isTeacher() {
       return request.auth != null
         && request.auth.token.email_verified == true
         && request.auth.token.email in ['PASTE_TEACHER_EMAIL@gmail.com'];
     }
 
+    // 試題：學生只能讀「開放中」的試題；只有老師能新增、修改、刪除
+    match /tests/{id} {
+      allow get, list: if resource.data.published == true || isTeacher();
+      allow create, update, delete: if isTeacher();
+    }
+
+    // 學生作答紀錄
     match /submissions/{id} {
       // 學生：只能「新增」自己的作答紀錄，不能看別人的
       allow create: if request.resource.data.keys().hasAll(['testId', 'className', 'seat', 'name', 'items'])
+        && request.resource.data.testId is string && request.resource.data.testId.size() <= 100
         && request.resource.data.name is string && request.resource.data.name.size() <= 50
         && request.resource.data.className is string && request.resource.data.className.size() <= 30
         && request.resource.data.seat is string && request.resource.data.seat.size() <= 10
-        && request.resource.data.items is list && request.resource.data.items.size() <= 50;
+        && request.resource.data.items is list && request.resource.data.items.size() <= 100;
       // 老師：可以看、修改、刪除
       allow read, update, delete: if isTeacher();
     }

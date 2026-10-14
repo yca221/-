@@ -3,18 +3,29 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // ⚠️ 把下面的 Email 換成老師的 Google 帳號（要跟 config.js 的 TEACHER_EMAILS 一樣）
+    //    多位老師就寫成 ['a@gmail.com', 'b@gmail.com']
     function isTeacher() {
       return request.auth != null
         && request.auth.token.email_verified == true
         && request.auth.token.email in ['PASTE_TEACHER_EMAIL@gmail.com'];
     }
 
+    // 學生錄音
     match /recordings/{allPaths=**} {
       // 學生：只能上傳「新的」錄音檔（10MB 以內、必須是音訊），不能覆蓋或下載
       allow create: if request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('(audio|video)/.*');
       // 老師：可以聽、下載、刪除
       allow read, delete: if isTeacher();
+    }
+
+    // 老師上傳的試題圖片、考官錄音
+    // （學生是透過老師存在試題裡的下載連結讀取，不需要另外開放讀取權限）
+    match /test-assets/{allPaths=**} {
+      allow read, delete: if isTeacher();
+      allow create, update: if isTeacher()
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('(image|audio|video)/.*');
     }
   }
 }

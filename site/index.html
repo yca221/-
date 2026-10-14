@@ -24,7 +24,8 @@
   .field{margin-top:16px}
   .field label{display:block;font-weight:700;font-size:15px;margin-bottom:6px}
   .field input{width:100%;font-size:18px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;outline:none;background:#fff}
-  .field input:focus{border-color:var(--accent)}
+  .field input:focus,.field select:focus{border-color:var(--accent)}
+  .field select{width:100%;font-size:18px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;outline:none;background:#fff;font-family:inherit}
   .row{display:flex;gap:12px} .row>.field{flex:1}
   .btn{display:block;width:100%;margin-top:18px;border:none;cursor:pointer;font-weight:800;font-size:18px;color:#fff;
     background:var(--accent);padding:15px;border-radius:16px;font-family:inherit}
@@ -89,7 +90,8 @@
   <div class="big-emoji">🎤</div>
   <h1 id="app-title">GEPT Kids 口說練習</h1>
   <p class="sub">請先填好你的資料，再開始測驗。</p>
-  <span class="badge" id="mode-badge"></span>
+  <span class="badge" id="mode-badge">載入試題中…</span>
+  <div class="field hidden" id="pick-wrap"><label for="in-test">選擇試題</label><select id="in-test"></select></div>
   <div class="row">
     <div class="field"><label for="in-class">班級</label><input id="in-class" type="text" placeholder="例如：501" autocomplete="off"></div>
     <div class="field"><label for="in-seat">座號</label><input id="in-seat" type="text" inputmode="numeric" placeholder="例如：7" autocomplete="off"></div>
@@ -104,7 +106,7 @@
     </ul>
   </div>
   <div class="err" id="welcome-err"></div>
-  <button class="btn" id="btn-to-mic">下一步：測試麥克風 →</button>
+  <button class="btn" id="btn-to-mic" disabled>下一步：測試麥克風 →</button>
 </section>
 
 <!-- ================= 畫面 2：麥克風測試 ================= -->
@@ -143,6 +145,7 @@
     </div>
   </div>
 
+  <button class="btn hidden" id="btn-tap-play">▶ 按這裡播放題目</button>
   <div id="ctl-prep" class="btns hidden">
     <button class="btn ghost" id="btn-replay">🔊 再聽一次</button>
     <button class="btn" id="btn-skip-prep">準備好了 →</button>
@@ -174,24 +177,19 @@
 <script src="questions.js"></script>
 <script type="module">
 const $ = id => document.getElementById(id);
-const C = window.TEST_CONFIG || {};
-const PARTS = window.TEST_PARTS || [];
-const PICS = window.TEST_PICTURES || {};
-const FB = window.FIREBASE_CONFIG || {};
-const FIREBASE_VER = "10.12.2";
+const params = new URLSearchParams(location.search);
 // 開發測試用：網址加 ?speed=10 會讓倒數快 10 倍（正式使用不要加）
-const SPEED = Math.max(1, Number(new URLSearchParams(location.search).get("speed")) || 1);
+const SPEED = Math.max(1, Number(params.get("speed")) || 1);
+const PREVIEW = params.has("preview");            // 老師預覽：不上傳
+const PICS = window.TEST_PICTURES || {};
+const DEFAULTS = { voiceRate: 0.85, maxRetries: 1, allowReplay: true, showQuestionText: false };
+const firebaseReady = () => { const k = window.FIREBASE_CONFIG?.apiKey; return !!k && !String(k).startsWith("PASTE"); };
+const fbModule = () => import("./firebase.js");
 
-const firebaseReady = () => !!FB.apiKey && !String(FB.apiKey).startsWith("PASTE");
-const items = PARTS.flatMap((part, pi) => part.items.map(it => ({ ...it, part, pi })));
+let TEST = null, C = DEFAULTS, items = [];
 const results = {};          // 題目 id → { blob, mime, ext, duration }
 const student = {};
 let startedAt = null, testing = false;
-
-$("app-title").textContent = C.title || "GEPT Kids 口說練習";
-document.title = C.title || document.title;
-$("mode-badge").textContent = firebaseReady() ? "✅ 已連線，錄音會自動交給老師" : "🧪 本機測試模式（尚未連接後台，錄音不會上傳）";
-$("mode-badge").classList.toggle("online", firebaseReady());
 
 function show(id){
   for (const s of document.querySelectorAll("section.card")) s.classList.toggle("hidden", s.id !== id);
@@ -199,11 +197,89 @@ function show(id){
 }
 window.addEventListener("beforeunload", e => { if (testing) { e.preventDefault(); e.returnValue = ""; } });
 
+/* ---------------- 載入試題 ----------------
+   ?test=試題代號 → 讀取老師在後台建立的試題
+   沒有指定      → 列出所有開放中的試題讓學生選；都沒有的話用 questions.js 的範例題 */
+function sampleTest(){
+  const cfg = window.TEST_CONFIG || {};
+  return { id: cfg.testId || "sample", title: cfg.title || "口說練習", config: cfg, parts: window.TEST_PARTS || [] };
+}
+function picsOf(it){
+  const list = [];
+  if (it.picture) list.push(it.picture);
+  if (it.pictures) list.push(...it.pictures);
+  if (it.scenes) list.push(...it.scenes);
+  if (it.images) list.push(...it.images.map(im => ({ src: im.url })));
+  return list;
+}
+function useTest(t){
+  TEST = t;
+  C = { ...DEFAULTS, ...(t.config || {}) };
+  items = (t.parts || []).flatMap((part, pi) => (part.items || []).map((it, ii) => ({
+    ...it, id: it.id || `P${pi + 1}-${ii + 1}`, part, pi, pics: picsOf(it),
+  })));
+  $("app-title").textContent = t.title || "口說練習";
+  document.title = t.title || document.title;
+}
+function setBadge(text, online){
+  $("mode-badge").textContent = text; $("mode-badge").classList.toggle("online", !!online);
+}
+function ready(t){
+  useTest(t);
+  if (!items.length) return bootError("這份試題還沒有題目，請跟老師確認。");
+  if (PREVIEW) setBadge("👀 老師預覽模式：錄音不會上傳");
+  else if (firebaseReady() && t.id !== sampleTest().id) setBadge("✅ 已連線，錄音會自動交給老師", true);
+  else if (firebaseReady()) setBadge("🧪 目前沒有開放的試題，這是範例題（錄音不會上傳）");
+  else setBadge("🧪 本機測試模式（尚未連接後台，錄音不會上傳）");
+  $("btn-to-mic").disabled = false;
+}
+function bootError(msg){
+  setBadge("⚠️ " + msg);
+  $("welcome-err").textContent = msg;
+  $("btn-to-mic").disabled = true;
+}
+async function boot(){
+  const wanted = params.get("test");
+  if (firebaseReady()) {
+    try {
+      const { loadFirebase, waitForUser } = await fbModule();
+      const fb = await loadFirebase({ auth: PREVIEW });
+      if (PREVIEW) await waitForUser(fb);       // 預覽未開放的試題需要老師身分
+      if (wanted) {
+        const snap = await fb.fs.getDoc(fb.fs.doc(fb.db, "tests", wanted));
+        if (!snap.exists()) return bootError("找不到這份試題，請跟老師確認網址是否正確。");
+        return ready({ id: snap.id, ...snap.data() });
+      }
+      const qs = await fb.fs.getDocs(fb.fs.query(fb.fs.collection(fb.db, "tests"), fb.fs.where("published", "==", true)));
+      const list = qs.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => String(a.title).localeCompare(String(b.title), "zh-Hant", { numeric: true }));
+      if (list.length === 1) return ready(list[0]);
+      if (list.length > 1) {
+        const sel = $("in-test"); sel.innerHTML = "";
+        list.forEach(t => sel.append(new Option(t.title || t.id, t.id)));
+        sel.onchange = () => ready(list.find(t => t.id === sel.value));
+        $("pick-wrap").classList.remove("hidden");
+        return ready(list[0]);
+      }
+    } catch (err) {
+      console.error(err);
+      if (wanted || PREVIEW) {
+        return bootError(err?.code === "permission-denied"
+          ? "這份試題目前沒有開放，請跟老師確認。"
+          : "試題讀取失敗，請檢查網路後重新整理網頁。");
+      }
+    }
+  }
+  ready(sampleTest());
+}
+boot();
+
 /* ---------------- 畫面 1：基本資料 ---------------- */
 $("btn-to-mic").onclick = () => {
   const className = $("in-class").value.trim(), seat = $("in-seat").value.trim(), name = $("in-name").value.trim();
   if (!className || !seat || !name) { $("welcome-err").textContent = "請把班級、座號、姓名都填好喔！"; return; }
   Object.assign(student, { className, seat, name });
+  $("pick-wrap").classList.add("hidden");
   show("screen-mic");
 };
 
@@ -268,7 +344,7 @@ function beep(){
   });
 }
 
-/* ---------------- 電腦考官的聲音（瀏覽器內建語音） ---------------- */
+/* ---------------- 播放題目：老師上傳的錄音檔，或瀏覽器內建語音 ---------------- */
 const hasTTS = "speechSynthesis" in window;
 let voice = null;
 function loadVoice(){
@@ -292,6 +368,33 @@ function speak(text){
     speechSynthesis.speak(u);
   });
 }
+const qAudio = new Audio(); qAudio.preload = "auto";
+function silentWav(){
+  const n = 800, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true);
+  v.setUint16(34, 8, true); w(36, "data"); v.setUint32(40, n, true); for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+function unlockAudio(){ qAudio.src = silentWav(); qAudio.play().catch(() => {}); }   // 讓 iPhone/iPad 之後能自動播放
+function playUrl(url){
+  return new Promise(resolve => {
+    let fin = false;
+    const end = () => { if (fin) return; fin = true; qAudio.onended = qAudio.onerror = null; clearTimeout(guard); $("btn-tap-play").classList.add("hidden"); resolve(); };
+    const guard = setTimeout(end, 180000);
+    qAudio.onended = end;
+    qAudio.onerror = () => { console.warn("題目音檔播放失敗", url); end(); };
+    qAudio.src = url;
+    qAudio.play().catch(() => {
+      // 瀏覽器擋住自動播放 → 請學生自己按一下
+      const b = $("btn-tap-play"); b.classList.remove("hidden");
+      b.onclick = () => { b.classList.add("hidden"); qAudio.play().catch(end); };
+    });
+  });
+}
+const playQuestion = it => it.audio?.url ? playUrl(it.audio.url) : speak(it.say);
+function stopQuestion(){ if (hasTTS) speechSynthesis.cancel(); qAudio.pause(); }
 
 /* ---------------- 畫面 2：麥克風測試 ---------------- */
 let micTested = false;
@@ -312,16 +415,17 @@ $("btn-voice-test").onclick = () => {
   if (!hasTTS) { $("mic-err").textContent = "這個瀏覽器不能唸題目，題目會改成直接顯示在螢幕上。"; return; }
   speak("Hello! Welcome to the speaking test.");
 };
-$("btn-start").onclick = () => { if (micTested) runTest(); };
+$("btn-start").onclick = () => { if (micTested) { unlockAudio(); runTest(); } };
 
 /* ---------------- 圖片 ---------------- */
 function renderPicture(key){
   const p = typeof key === "string" ? PICS[key] : key;
   const box = document.createElement("div"); box.className = "pic";
-  if (!p) { box.innerHTML = `<div class="missing">找不到圖片「${String(key)}」</div>`; return box; }
+  const missing = msg => { box.innerHTML = ""; const m = document.createElement("div"); m.className = "missing"; m.textContent = msg; box.appendChild(m); };
+  if (!p) { missing(`找不到圖片「${String(key)}」`); return box; }
   if (p.src) {
     const img = document.createElement("img"); img.src = p.src; img.alt = "";
-    img.onerror = () => { box.innerHTML = `<div class="missing">圖片載入失敗：${p.src}<br>請確認檔名和資料夾是否正確</div>`; };
+    img.onerror = () => missing("圖片載入失敗，請檢查網路或跟老師說");
     box.appendChild(img); return box;
   }
   box.style.background = p.bg || "#EAF6FF";
@@ -359,23 +463,23 @@ function setStage(kind, label, sub){
   if (kind === "listen" || kind === "review") { $("ring-num").textContent = kind === "listen" ? "👂" : "✓"; $("ring-fg").style.strokeDashoffset = "0"; }
 }
 function renderItem(it, i){
-  $("item-part").textContent = it.part.titleEn || it.part.title;
+  $("item-part").textContent = it.part.titleEn || it.part.title || "";
   $("item-count").textContent = `第 ${i + 1} / ${items.length} 題`;
   $("pips").innerHTML = items.map((_, k) => `<span class="pip ${k < i ? "done" : k === i ? "active" : ""}"></span>`).join("");
   const body = $("item-body"); body.innerHTML = "";
   if (it.text) {
     const t = document.createElement("div"); t.className = "prompt-text"; t.textContent = it.text; body.appendChild(t);
   }
-  if (it.picture) body.appendChild(renderPicture(it.picture));
-  if (it.pictures) {
+  if (it.pics.length === 1) body.appendChild(renderPicture(it.pics[0]));
+  if (it.pics.length > 1) {
     const g = document.createElement("div"); g.className = "story";
-    it.pictures.forEach((k, n) => { const p = renderPicture(k); const b = document.createElement("span"); b.className = "num"; b.textContent = n + 1; p.prepend(b); g.appendChild(p); });
+    it.pics.forEach((k, n) => { const p = renderPicture(k); const b = document.createElement("span"); b.className = "num"; b.textContent = n + 1; p.prepend(b); g.appendChild(p); });
     body.appendChild(g);
   }
-  if (!it.text && !it.picture && !it.pictures) {
+  if (!it.text && !it.pics.length) {
     const l = document.createElement("div"); l.className = "listen-box"; l.textContent = "👂 請仔細聽題目"; body.appendChild(l);
   }
-  if (it.say && (C.showQuestionText || !hasTTS) && !it.text) {
+  if (it.say && !it.text && (C.showQuestionText || (!hasTTS && !it.audio?.url))) {
     const q = document.createElement("div"); q.className = "q-text"; q.textContent = it.say; body.appendChild(q);
   }
   if (it.hint) { const h = document.createElement("div"); h.className = "hint"; h.textContent = "💡 " + it.hint; body.appendChild(h); }
@@ -388,26 +492,29 @@ function waitClick(ids){
 }
 async function runItem(it, i){
   renderItem(it, i);
+  const hasPrompt = !!(it.audio?.url || it.say);
   for (let attempt = 0; ; attempt++) {
-    setStage("listen", "請聽題目…", "Listen.");
-    await speak(it.say);
+    if (hasPrompt) { setStage("listen", "請聽題目…", "Listen."); await playQuestion(it); }
     if (it.prep > 0) {
       setStage("prep", "準備時間", "想一想要怎麼說，時間到會「嗶」一聲。");
-      let replays = C.allowReplay && hasTTS ? 1 : 0;
-      $("btn-replay").classList.toggle("hidden", !replays || !it.say);
-      $("btn-replay").onclick = () => { if (replays-- > 0) speak(it.say); $("btn-replay").classList.add("hidden"); };
+      let replays = C.allowReplay && hasPrompt && (it.audio?.url || hasTTS) ? 1 : 0;
+      $("btn-replay").classList.toggle("hidden", !replays);
+      $("btn-replay").onclick = () => {
+        if (replays-- > 0) { if (it.audio?.url) { qAudio.currentTime = 0; qAudio.play().catch(() => {}); } else speak(it.say); }
+        $("btn-replay").classList.add("hidden");
+      };
       await countdown(it.prep, $("btn-skip-prep"));
-      if (hasTTS) speechSynthesis.cancel();
     }
+    stopQuestion();
     await beep();
     setStage("rec", '<span class="dot"></span>錄音中，請開始說', "說完可以按「我說完了」。");
     meterEl = $("rec-meter");
     const rec = startRecording();
     $("btn-stop").disabled = true; setTimeout(() => { $("btn-stop").disabled = false; }, 1500);
-    await countdown(it.answer, $("btn-stop"));
+    await countdown(it.answer || 15, $("btn-stop"));
     results[it.id] = await rec.stop();
 
-    const canRetry = attempt < (C.maxRetries ?? 0);
+    const canRetry = attempt < (Number(C.maxRetries) || 0);
     setStage("review", "這題錄好了！", canRetry ? "可以先聽聽看，不滿意可以重錄一次。" : "可以先聽聽看，然後按下一題。");
     $("btn-retry").classList.toggle("hidden", !canRetry);
     $("review-audio").src = URL.createObjectURL(results[it.id].blob);
@@ -419,8 +526,8 @@ async function runItem(it, i){
 }
 async function showPartIntro(part){
   $("part-en").textContent = part.titleEn || "";
-  $("part-title").textContent = part.title;
-  $("part-intro").textContent = part.intro || "";
+  $("part-title").textContent = part.title || "";
+  $("part-intro").textContent = part.intro || "準備好了就按開始。";
   show("screen-part");
   await waitClick(["btn-part-go"]);
 }
@@ -443,15 +550,16 @@ function stamp(d = new Date()){
   const p = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
-const folder = () => `recordings/${safe(C.testId || "test")}/${safe(student.className)}/${student.stamp}_${safe(student.seat)}_${safe(student.name)}`;
+const folder = () => `recordings/${safe(TEST.id)}/${safe(student.className)}/${student.stamp}_${safe(student.seat)}_${safe(student.name)}`;
+const partShort = it => String(it.part.title || "").split(/[：:]/)[0] || `第 ${it.pi + 1} 部分`;
 
 function buildRows(){
   $("up-list").innerHTML = "";
   items.forEach((it, i) => {
     const row = document.createElement("div"); row.className = "up-row";
-    const label = document.createElement("span"); label.textContent = `第 ${i + 1} 題（${it.part.title.split("：")[0]}）`;
-    const st = document.createElement("span"); st.className = "stat wait"; st.id = "st-" + it.id; st.textContent = uploaded[it.id] ? "✓ 完成" : "等待中";
-    if (uploaded[it.id]) st.className = "stat ok";
+    const label = document.createElement("span"); label.textContent = `第 ${i + 1} 題（${partShort(it)}）`;
+    const st = document.createElement("span"); st.id = "st-" + it.id;
+    st.className = uploaded[it.id] ? "stat ok" : "stat wait"; st.textContent = uploaded[it.id] ? "✓ 完成" : "等待中";
     row.append(label, st); $("up-list").appendChild(row);
   });
 }
@@ -461,38 +569,33 @@ async function uploadAll(){
   show("screen-upload");
   student.stamp ||= stamp();
   $("up-err").textContent = ""; $("btn-up-retry").classList.add("hidden");
-  if (!firebaseReady()) { testing = false; return showLocalFallback(false); }
+  // 範例題、預覽、沒有後台 → 不上傳
+  if (!firebaseReady() || PREVIEW || TEST.id === sampleTest().id) { testing = false; return showLocalFallback(false); }
   $("up-emoji").textContent = "📤"; $("up-title").textContent = "正在把錄音交給老師…"; $("up-desc").textContent = "請不要關掉視窗。";
   buildRows();
   try {
-    const [{ initializeApp, getApps }, { getStorage, ref, uploadBytes }, { getFirestore, collection, addDoc, serverTimestamp }] = await Promise.all([
-      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-app.js`),
-      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-storage.js`),
-      import(`https://www.gstatic.com/firebasejs/${FIREBASE_VER}/firebase-firestore.js`),
-    ]);
-    const app = getApps()[0] || initializeApp(FB);
-    const storage = getStorage(app), db = getFirestore(app);
-
+    const { loadFirebase } = await fbModule();
+    const { db, storage, fs, st } = await loadFirebase();
     for (const it of items) {
       const r = results[it.id];
       if (!r) { setRow(it.id, "fail", "沒有錄到"); continue; }
       if (uploaded[it.id]) continue;
       setRow(it.id, "busy", "上傳中…");
       const path = `${folder()}/${it.id}.${r.ext}`;
-      await uploadBytes(ref(storage, path), r.blob, { contentType: r.mime });
+      await st.uploadBytes(st.ref(storage, path), r.blob, { contentType: r.mime });
       uploaded[it.id] = path;
       setRow(it.id, "ok", "✓ 完成");
     }
     if (!docSaved) {
-      await addDoc(collection(db, "submissions"), {
-        testId: C.testId || "test",
+      await fs.addDoc(fs.collection(db, "submissions"), {
+        testId: TEST.id, testTitle: TEST.title || "",
         className: student.className, seat: student.seat, name: student.name,
         folder: folder(),
         startedAt, finishedAt: new Date().toISOString(),
-        createdAt: serverTimestamp(),
+        createdAt: fs.serverTimestamp(),
         userAgent: navigator.userAgent.slice(0, 300),
         items: items.filter(it => uploaded[it.id]).map(it => ({
-          id: it.id, part: it.part.title, say: it.say || "", text: it.text || "",
+          id: it.id, part: it.part.title || "", say: it.say || "", text: it.text || "",
           path: uploaded[it.id], mime: results[it.id].mime, duration: results[it.id].duration,
         })),
       });
@@ -512,11 +615,12 @@ async function uploadAll(){
 }
 $("btn-up-retry").onclick = () => uploadAll();
 
-/* ---------------- 本機備援：沒有後台或上傳失敗時，讓學生自己下載 ---------------- */
+/* ---------------- 本機備援：沒有後台、預覽或上傳失敗時，讓學生自己下載 ---------------- */
 function showLocalFallback(afterError){
   if (!afterError) {
-    $("up-emoji").textContent = "🧪"; $("up-title").textContent = "完成（本機測試模式）";
-    $("up-desc").textContent = "目前還沒有連接後台，錄音沒有上傳。可以點下面的連結下載或試聽：";
+    $("up-emoji").textContent = PREVIEW ? "👀" : "🧪";
+    $("up-title").textContent = PREVIEW ? "預覽完成" : "完成（測試模式）";
+    $("up-desc").textContent = "這次的錄音沒有上傳。可以點下面的連結下載或試聽：";
     $("up-list").innerHTML = "";
   }
   const list = $("dl-list"); list.innerHTML = ""; list.classList.remove("hidden");

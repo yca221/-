@@ -3,84 +3,187 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>口說練習・老師後台</title>
+<title>口說測驗・老師後台</title>
 <style>
-  :root{ --ink:#2B2A33; --muted:#7A7686; --line:#EFE7DA; --bg:#F6F4F0; --accent:#7C5CFF; --accent-soft:#EEE9FF; --ok:#20B486; --bad:#FF5A5F; }
+  :root{ --ink:#2B2A33; --muted:#7A7686; --line:#EFE7DA; --bg:#F6F4F0; --accent:#7C5CFF; --accent-soft:#EEE9FF; --ok:#20B486; --bad:#FF5A5F; --warn:#B7791F; }
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
-  header{background:#fff;border-bottom:1px solid var(--line);padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:2}
-  header h1{font-size:19px;margin:0;flex:1;min-width:180px}
-  main{max-width:900px;margin:0 auto;padding:16px}
-  .btn{border:none;cursor:pointer;font-weight:700;font-size:15px;color:#fff;background:var(--accent);padding:10px 16px;border-radius:12px;font-family:inherit}
+  header{background:#fff;border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+  header h1{font-size:18px;margin:0;margin-right:auto}
+  .tabs{display:flex;gap:6px}
+  .tab{border:none;background:none;font:inherit;font-weight:700;padding:8px 12px;border-radius:10px;cursor:pointer;color:var(--muted)}
+  .tab.on{background:var(--accent-soft);color:var(--accent)}
+  main{max-width:900px;margin:0 auto;padding:16px 16px 120px}
+  .btn{border:none;cursor:pointer;font-weight:700;font-size:15px;color:#fff;background:var(--accent);padding:10px 16px;border-radius:12px;font-family:inherit;white-space:nowrap}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
   .btn.ghost{background:var(--accent-soft);color:var(--accent)}
-  .box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;margin-top:14px}
-  .muted{color:var(--muted)} .err{color:var(--bad);font-weight:600}
-  .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-  .filters select,.filters input{font-size:15px;padding:9px 12px;border:2px solid var(--line);border-radius:10px;background:#fff;font-family:inherit}
-  .filters input{flex:1;min-width:140px}
+  .btn.plain{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn.danger{background:#FFE9EA;color:var(--bad)}
+  .btn.sm{font-size:13px;padding:6px 10px;border-radius:9px}
+  .box{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:14px}
+  .muted{color:var(--muted)} .err{color:var(--bad);font-weight:600} .small{font-size:13px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .grow{flex:1;min-width:160px}
+  input[type=text],input[type=number],input[type=search],textarea,select{font:inherit;font-size:15px;padding:9px 12px;border:2px solid var(--line);border-radius:10px;background:#fff;width:100%}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+  textarea{resize:vertical;min-height:44px}
+  label.f{display:block;font-weight:700;font-size:13px;margin:10px 0 4px;color:#4a4757}
+  label.f .muted{font-weight:400}
+  .hidden{display:none!important}
+
+  /* 學生錄音 */
   details.sub{background:#fff;border:1px solid var(--line);border-radius:14px;margin-top:10px}
   details.sub>summary{cursor:pointer;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;list-style:none}
   details.sub>summary::-webkit-details-marker{display:none}
   details.sub[open]>summary{border-bottom:1px solid var(--line)}
   .who{font-weight:800;font-size:16px} .when{color:var(--muted);font-size:14px;margin-left:auto}
   .tag{font-size:12px;font-weight:700;background:var(--accent-soft);color:var(--accent);padding:2px 8px;border-radius:999px}
+  .tag.ok{background:#DDF6EC;color:#0E7A57} .tag.off{background:#F1ECE3;color:var(--muted)}
   .items{padding:6px 16px 14px}
-  .it{padding:10px 0;border-bottom:1px dashed var(--line)}
-  .it:last-child{border-bottom:none}
+  .it{padding:10px 0;border-bottom:1px dashed var(--line)} .it:last-child{border-bottom:none}
   .it .q{font-size:14px} .it .q b{color:var(--accent)}
   .it audio{width:100%;margin-top:6px;height:40px}
   .it a{font-size:13px;color:var(--accent)}
-  .hidden{display:none!important}
+
+  /* 試題列表 */
+  .test-card{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:14px;margin-top:10px}
+  .test-card .t{font-weight:800;font-size:16px}
+
+  /* 編輯器 */
+  .part{border:2px solid var(--accent-soft);border-radius:16px;padding:14px;margin-top:16px;background:#FCFBFF}
+  .part-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .part-head .num{font-weight:800;color:var(--accent)}
+  .item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:12px}
+  .item-head{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:2px}
+  .item-head b{margin-right:auto}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .thumb{position:relative;width:96px;height:72px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#F7F3EC;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);text-align:center}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb .x{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;font-size:13px;line-height:22px;padding:0}
+  .thumb .n{position:absolute;left:3px;top:3px;background:var(--ink);color:#fff;font-size:11px;font-weight:800;border-radius:50%;width:18px;height:18px;line-height:18px}
+  .filebtn{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+  .filebtn input{display:none}
+  .aud{display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap}
+  .aud audio{height:36px;flex:1;min-width:200px}
+  .savebar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;justify-content:center;z-index:6;flex-wrap:wrap}
+  .switch{display:flex;gap:8px;align-items:center;font-weight:700;cursor:pointer}
+  .switch input{width:20px;height:20px}
+
+  /* 分享視窗 */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .modal .box{max-width:420px;width:100%;text-align:center;margin:0}
+  .qr svg{width:220px;height:220px}
+  .link{word-break:break-all;background:#F7F3EC;border-radius:10px;padding:10px;font-size:14px;margin:10px 0}
+  @media (max-width:560px){ .two{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
 <header>
-  <h1>🎤 口說練習・老師後台</h1>
-  <span class="muted" id="who"></span>
-  <button class="btn ghost hidden" id="btn-logout">登出</button>
+  <h1>🎤 口說測驗・老師後台</h1>
+  <nav class="tabs hidden" id="tabs">
+    <button class="tab on" data-tab="subs">🎧 學生錄音</button>
+    <button class="tab" data-tab="tests">📝 試題管理</button>
+  </nav>
+  <span class="muted small" id="who"></span>
+  <button class="btn ghost sm hidden" id="btn-logout">登出</button>
 </header>
 <main>
   <div class="box" id="login-box">
-    <p>請用老師的 Google 帳號登入，才能看到學生的錄音。</p>
-    <button class="btn" id="btn-login">用 Google 帳號登入</button>
+    <p>請用老師的 Google 帳號登入，才能管理試題和聽學生的錄音。</p>
+    <button class="btn" id="btn-login" disabled>載入中…</button>
     <p class="err" id="login-err"></p>
   </div>
 
-  <div id="list-box" class="hidden">
-    <div class="box filters">
-      <select id="f-test"></select>
-      <select id="f-class"></select>
-      <input id="f-name" type="search" placeholder="搜尋姓名或座號">
+  <!-- ============ 學生錄音 ============ -->
+  <section id="tab-subs" class="hidden">
+    <div class="box row">
+      <select id="f-test" class="grow"></select>
+      <select id="f-class" style="width:auto"></select>
+      <input id="f-name" type="search" placeholder="搜尋姓名或座號" class="grow">
       <button class="btn ghost" id="btn-reload">↻ 重新整理</button>
     </div>
     <p class="muted" id="count"></p>
     <div id="list"></div>
-  </div>
+  </section>
+
+  <!-- ============ 試題列表 ============ -->
+  <section id="tab-tests" class="hidden">
+    <div class="box">
+      <div class="row">
+        <b class="grow">建立新的口說試題</b>
+        <button class="btn" id="btn-new-template">＋ 用小學英檢架構建立</button>
+        <button class="btn ghost" id="btn-new-blank">＋ 空白試題</button>
+      </div>
+      <p class="muted small" style="margin:8px 0 0">建立後可以修改題目、上傳圖片和考官錄音檔。每份試題都有自己的網址和 QR Code，打開「開放給學生作答」後學生才看得到。</p>
+    </div>
+    <p class="muted" id="tests-count"></p>
+    <div id="tests-list"></div>
+  </section>
+
+  <!-- ============ 試題編輯器 ============ -->
+  <section id="tab-edit" class="hidden">
+    <div class="row" style="margin-top:4px">
+      <button class="btn plain" id="btn-back">← 回試題列表</button>
+      <span class="muted small grow" id="edit-id"></span>
+      <button class="btn ghost" id="btn-preview">👀 預覽</button>
+      <button class="btn ghost" id="btn-share-cur">🔗 網址 / QR</button>
+    </div>
+    <div class="box">
+      <label class="f">試題名稱 <span class="muted">（學生會看到）</span></label>
+      <input type="text" id="e-title" placeholder="例如：小學英檢口說模擬測驗 第 1 回">
+      <div class="two">
+        <div><label class="f">每題可重錄幾次</label>
+          <select id="e-retries"><option value="0">0 次（跟正式考試一樣）</option><option value="1">1 次</option><option value="2">2 次</option><option value="3">3 次</option></select></div>
+        <div><label class="f">電腦語音速度 <span class="muted">（沒有上傳考官錄音時使用）</span></label>
+          <select id="e-rate"><option value="0.7">慢</option><option value="0.85">稍慢（建議）</option><option value="1">正常</option></select></div>
+      </div>
+      <div class="row" style="margin-top:12px;gap:18px">
+        <label class="switch"><input type="checkbox" id="e-replay"> 準備時間可以「再聽一次」</label>
+        <label class="switch"><input type="checkbox" id="e-showtext"> 題目文字也顯示在螢幕上</label>
+      </div>
+    </div>
+    <div id="e-parts"></div>
+    <button class="btn ghost" id="btn-add-part" style="margin-top:16px;width:100%">＋ 新增一個部分</button>
+  </section>
 </main>
 
+<div class="savebar hidden" id="savebar">
+  <label class="switch"><input type="checkbox" id="e-published"> 開放給學生作答</label>
+  <span class="small muted" id="save-state"></span>
+  <button class="btn" id="btn-save">💾 儲存</button>
+</div>
+
+<div class="modal hidden" id="share-modal">
+  <div class="box">
+    <h3 style="margin:0 0 4px" id="share-title"></h3>
+    <p class="err small" id="share-warn"></p>
+    <div class="qr" id="share-qr"></div>
+    <div class="link" id="share-link"></div>
+    <div class="row" style="justify-content:center">
+      <button class="btn" id="btn-copy">📋 複製網址</button>
+      <button class="btn ghost" id="btn-open">開啟</button>
+      <button class="btn plain" id="btn-close-share">關閉</button>
+    </div>
+  </div>
+</div>
+
 <script src="config.js"></script>
+<script src="questions.js"></script>
 <script type="module">
 const $ = id => document.getElementById(id);
-const FB = window.FIREBASE_CONFIG || {};
+const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids.filter(k => k != null)); return e; };
 const TEACHERS = (window.TEACHER_EMAILS || []).map(e => e.toLowerCase());
-const V = "10.12.2";
+const { firebaseReady, loadFirebase } = await import("./firebase.js");
 
-if (!FB.apiKey || String(FB.apiKey).startsWith("PASTE")) {
+if (!firebaseReady()) {
   $("login-box").innerHTML = '<p class="err">還沒設定 Firebase。</p><p>請先打開 <b>config.js</b>，把你 Firebase 專案的設定貼進去。</p>';
   throw new Error("Firebase 尚未設定");
 }
+const fb = await loadFirebase({ auth: true });
+const { db, storage, fs: F, st: S, au: A, auth } = fb;
 
-const [{ initializeApp }, A, F, S] = await Promise.all([
-  import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`),
-  import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`),
-  import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`),
-  import(`https://www.gstatic.com/firebasejs/${V}/firebase-storage.js`),
-]);
-const app = initializeApp(FB);
-const auth = A.getAuth(app), db = F.getFirestore(app), storage = S.getStorage(app);
-
-let all = [];
-
+/* ====================== 登入 ====================== */
 $("btn-login").onclick = async () => {
   $("login-err").textContent = "";
   try { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); }
@@ -94,87 +197,387 @@ $("btn-login").onclick = async () => {
   }
 };
 $("btn-logout").onclick = () => A.signOut(auth);
+$("btn-login").disabled = false; $("btn-login").textContent = "用 Google 帳號登入";
 
 A.onAuthStateChanged(auth, user => {
   $("btn-logout").classList.toggle("hidden", !user);
   $("who").textContent = user ? user.email : "";
-  if (!user) { $("login-box").classList.remove("hidden"); $("list-box").classList.add("hidden"); return; }
-  if (!TEACHERS.includes((user.email || "").toLowerCase())) {
-    $("login-box").classList.remove("hidden"); $("list-box").classList.add("hidden");
-    $("login-err").textContent = `${user.email} 不是老師帳號。請在 config.js 的 TEACHER_EMAILS 和安全規則裡加入這個 Email。`;
+  const ok = user && TEACHERS.includes((user.email || "").toLowerCase());
+  $("login-box").classList.toggle("hidden", !!ok);
+  $("tabs").classList.toggle("hidden", !ok);
+  if (!ok) {
+    ["tab-subs", "tab-tests", "tab-edit", "savebar"].forEach(id => $(id).classList.add("hidden"));
+    if (user) $("login-err").textContent = `${user.email} 不是老師帳號。請在 config.js 的 TEACHER_EMAILS 和安全規則裡加入這個 Email。`;
     return;
   }
-  $("login-box").classList.add("hidden"); $("list-box").classList.remove("hidden");
-  load();
+  showTab("subs");
+  loadTests().then(loadSubs);
 });
 
-async function load(){
+/* ====================== 分頁 ====================== */
+let dirty = false;
+function showTab(name){
+  if (name !== "edit" && dirty && !confirm("試題還沒儲存，確定要離開嗎？")) return false;
+  if (name !== "edit") dirty = false;
+  for (const t of document.querySelectorAll(".tab")) t.classList.toggle("on", t.dataset.tab === name || (name === "edit" && t.dataset.tab === "tests"));
+  $("tab-subs").classList.toggle("hidden", name !== "subs");
+  $("tab-tests").classList.toggle("hidden", name !== "tests");
+  $("tab-edit").classList.toggle("hidden", name !== "edit");
+  $("savebar").classList.toggle("hidden", name !== "edit");
+  window.scrollTo({ top: 0 });
+  return true;
+}
+for (const t of document.querySelectorAll(".tab")) t.onclick = () => { if (showTab(t.dataset.tab) && t.dataset.tab === "tests") renderTests(); };
+window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+/* ====================== 學生錄音 ====================== */
+let subs = [], tests = [];
+const testTitle = id => tests.find(t => t.id === id)?.title || subs.find(s => s.testId === id)?.testTitle || id;
+
+async function loadSubs(){
   $("count").textContent = "讀取中…"; $("list").innerHTML = "";
   try {
-    const q = F.query(F.collection(db, "submissions"), F.orderBy("createdAt", "desc"), F.limit(500));
-    const snap = await F.getDocs(q);
-    all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    fillSelect("f-test", "全部測驗", all.map(s => s.testId));
-    fillSelect("f-class", "全部班級", all.map(s => s.className));
-    render();
+    const snap = await F.getDocs(F.query(F.collection(db, "submissions"), F.orderBy("createdAt", "desc"), F.limit(1000)));
+    subs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    fillSelect("f-test", "全部試題", [...new Set(subs.map(s => s.testId))].map(id => [id, testTitle(id)]));
+    fillSelect("f-class", "全部班級", [...new Set(subs.map(s => s.className))].map(c => [c, c]));
+    renderSubs();
   } catch (err) {
     console.error(err);
-    $("count").innerHTML = `<span class="err">讀不到資料（${err.code || err.message}）。如果是 permission-denied，請確認 Firestore 安全規則裡的老師 Email 是否正確。</span>`;
+    $("count").innerHTML = "";
+    $("count").append(el("span", { className: "err", textContent: `讀不到資料（${err.code || err.message}）。如果是 permission-denied，請確認 Firestore 安全規則裡的老師 Email 是否正確。` }));
   }
 }
-function fillSelect(id, allLabel, values){
-  const el = $(id), cur = el.value;
-  el.innerHTML = "";
-  el.append(new Option(allLabel, ""));
-  [...new Set(values.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "zh-Hant", { numeric: true }))
-    .forEach(v => el.append(new Option(v, v)));
-  el.value = [...el.options].some(o => o.value === cur) ? cur : "";
+function fillSelect(id, allLabel, pairs){
+  const s = $(id), cur = s.value;
+  s.innerHTML = ""; s.append(new Option(allLabel, ""));
+  pairs.filter(p => p[0]).sort((a, b) => String(a[1]).localeCompare(String(b[1]), "zh-Hant", { numeric: true }))
+    .forEach(([v, label]) => s.append(new Option(label, v)));
+  s.value = [...s.options].some(o => o.value === cur) ? cur : "";
 }
-["f-test", "f-class"].forEach(id => $(id).onchange = render);
-$("f-name").oninput = render;
-$("btn-reload").onclick = load;
+["f-test", "f-class"].forEach(id => $(id).onchange = renderSubs);
+$("f-name").oninput = renderSubs;
+$("btn-reload").onclick = loadSubs;
 
-function render(){
+function renderSubs(){
   const t = $("f-test").value, c = $("f-class").value, n = $("f-name").value.trim().toLowerCase();
-  const rows = all.filter(s => (!t || s.testId === t) && (!c || s.className === c)
+  const rows = subs.filter(s => (!t || s.testId === t) && (!c || s.className === c)
     && (!n || `${s.name} ${s.seat}`.toLowerCase().includes(n)));
   $("count").textContent = `共 ${rows.length} 份作答（點一下姓名就能聽錄音）`;
   const list = $("list"); list.innerHTML = "";
   for (const s of rows) {
-    const d = document.createElement("details"); d.className = "sub";
-    const sum = document.createElement("summary");
-    const who = document.createElement("span"); who.className = "who"; who.textContent = `${s.className} 班 ${s.seat} 號 ${s.name}`;
-    const tag = document.createElement("span"); tag.className = "tag"; tag.textContent = `${(s.items || []).length} 題`;
-    const when = document.createElement("span"); when.className = "when";
     const dt = s.createdAt?.toDate?.() || (s.finishedAt ? new Date(s.finishedAt) : null);
-    when.textContent = dt ? dt.toLocaleString("zh-TW", { hour12: false }) : "";
-    sum.append(who, tag, when);
-    const body = document.createElement("div"); body.className = "items";
-    d.append(sum, body);
+    const body = el("div", { className: "items" });
+    const d = el("details", { className: "sub" },
+      el("summary", {},
+        el("span", { className: "who", textContent: `${s.className} 班 ${s.seat} 號 ${s.name}` }),
+        el("span", { className: "tag", textContent: testTitle(s.testId) }),
+        el("span", { className: "tag off", textContent: `${(s.items || []).length} 題` }),
+        el("span", { className: "when", textContent: dt ? dt.toLocaleString("zh-TW", { hour12: false }) : "" })),
+      body);
     d.addEventListener("toggle", () => { if (d.open && !body.dataset.loaded) { body.dataset.loaded = "1"; loadAudios(s, body); } });
     list.appendChild(d);
   }
 }
 async function loadAudios(s, body){
   for (const [i, it] of (s.items || []).entries()) {
-    const row = document.createElement("div"); row.className = "it";
-    const q = document.createElement("div"); q.className = "q";
-    const b = document.createElement("b"); b.textContent = `${i + 1}. ${it.part || it.id}　`;
-    q.append(b, document.createTextNode(it.text ? `朗讀：${it.text}` : (it.say || "")));
-    if (it.duration) q.append(document.createTextNode(`（${it.duration} 秒）`));
-    row.appendChild(q);
+    const q = el("div", { className: "q" }, el("b", { textContent: `${i + 1}. ${it.part || it.id}　` }),
+      it.text ? `朗讀：${it.text}` : (it.say || ""), it.duration ? `（${it.duration} 秒）` : "");
+    const row = el("div", { className: "it" }, q);
     body.appendChild(row);
     try {
       const url = await S.getDownloadURL(S.ref(storage, it.path));
-      const au = document.createElement("audio"); au.controls = true; au.preload = "none"; au.src = url;
-      const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "在新分頁開啟 / 下載";
-      row.append(au, a);
+      row.append(el("audio", { controls: true, preload: "none", src: url }),
+        el("a", { href: url, target: "_blank", rel: "noopener", textContent: "在新分頁開啟 / 下載" }));
     } catch (err) {
-      const e = document.createElement("div"); e.className = "err"; e.textContent = `讀不到這個錄音（${err.code || err.message}）`;
-      row.appendChild(e);
+      row.append(el("div", { className: "err", textContent: `讀不到這個錄音（${err.code || err.message}）` }));
     }
   }
 }
+
+/* ====================== 試題列表 ====================== */
+async function loadTests(){
+  try {
+    const snap = await F.getDocs(F.query(F.collection(db, "tests"), F.orderBy("updatedAt", "desc")));
+    tests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error(err); tests = [];
+    $("tests-count").textContent = `讀不到試題（${err.code || err.message}）`;
+  }
+  renderTests();
+}
+const countItems = t => (t.parts || []).reduce((n, p) => n + (p.items || []).length, 0);
+function renderTests(){
+  $("tests-count").textContent = tests.length ? `共 ${tests.length} 份試題` : "還沒有試題，按上面的按鈕建立第一份吧！";
+  const box = $("tests-list"); box.innerHTML = "";
+  for (const t of tests) {
+    const dt = t.updatedAt?.toDate?.();
+    box.append(el("div", { className: "test-card" },
+      el("div", { className: "grow" },
+        el("div", { className: "t", textContent: t.title || "（未命名）" }),
+        el("div", { className: "row small muted", style: "gap:6px;margin-top:4px" },
+          el("span", { className: "tag " + (t.published ? "ok" : "off"), textContent: t.published ? "開放中" : "未開放" }),
+          `${(t.parts || []).length} 個部分・${countItems(t)} 題`,
+          dt ? `・${dt.toLocaleString("zh-TW", { hour12: false })} 更新` : "")),
+      el("button", { className: "btn sm", textContent: "✏️ 編輯", onclick: () => openEditor(t) }),
+      el("button", { className: "btn ghost sm", textContent: "🔗 網址 / QR", onclick: () => share(t) }),
+      el("button", { className: "btn plain sm", textContent: "複製一份", onclick: () => duplicateTest(t) }),
+      el("button", { className: "btn danger sm", textContent: "刪除", onclick: () => deleteTest(t) })));
+  }
+}
+const newId = () => F.doc(F.collection(db, "tests")).id;
+function templateParts(){
+  // 用 questions.js 的範例題當起點（表情符號圖片會變成「內建圖」）
+  return (window.TEST_PARTS || []).map(p => ({
+    title: p.title || "", titleEn: p.titleEn || "", intro: p.intro || "",
+    items: (p.items || []).map(it => ({
+      say: it.say || "", text: it.text || "", hint: it.hint || "",
+      scenes: [].concat(it.picture || [], it.pictures || []).filter(x => typeof x === "string"),
+      images: [], audio: null, prep: it.prep ?? 5, answer: it.answer ?? 15,
+    })),
+  }));
+}
+const blankItem = () => ({ say: "", text: "", hint: "", scenes: [], images: [], audio: null, prep: 5, answer: 15 });
+const blankPart = n => ({ title: `第${"一二三四五六七八九十"[n] || n + 1}部分`, titleEn: `Part ${n + 1}`, intro: "", items: [blankItem()] });
+const baseConfig = () => ({ maxRetries: 1, voiceRate: 0.85, allowReplay: true, showQuestionText: false });
+
+$("btn-new-template").onclick = () => openEditor({ id: newId(), isNew: true, title: "小學英檢口說模擬測驗", published: false, config: baseConfig(), parts: templateParts() });
+$("btn-new-blank").onclick = () => openEditor({ id: newId(), isNew: true, title: "", published: false, config: baseConfig(), parts: [blankPart(0)] });
+
+function duplicateTest(t){
+  const copy = structuredClone({ ...t, updatedAt: null, createdAt: null });
+  openEditor({ ...copy, id: newId(), isNew: true, title: (t.title || "") + "（複本）", published: false });
+}
+async function deleteTest(t){
+  if (!confirm(`確定要刪除「${t.title || t.id}」嗎？\n（學生已經交的錄音不會被刪除）`)) return;
+  try {
+    await F.deleteDoc(F.doc(db, "tests", t.id));
+    try { const all = await S.listAll(S.ref(storage, `test-assets/${t.id}`)); await Promise.all(all.items.map(r => S.deleteObject(r))); } catch (e) { console.warn(e); }
+    tests = tests.filter(x => x.id !== t.id); renderTests();
+  } catch (err) { alert("刪除失敗：" + (err.code || err.message)); }
+}
+
+/* ====================== 分享：網址 + QR Code ====================== */
+const studentUrl = (t, preview) => {
+  const u = new URL("./", location.href);
+  u.search = ""; u.searchParams.set("test", t.id);
+  if (preview) u.searchParams.set("preview", "1");
+  if (fb.emu) u.searchParams.set("emu", "1");
+  return u.toString();
+};
+let qrLib = null;
+async function share(t){
+  const url = studentUrl(t);
+  $("share-title").textContent = t.title || "口說試題";
+  $("share-warn").textContent = t.published ? "" : "⚠️ 這份試題還沒「開放給學生作答」，學生打開會看不到。";
+  $("share-link").textContent = url;
+  $("share-qr").innerHTML = "";
+  $("share-modal").classList.remove("hidden");
+  $("btn-copy").textContent = "📋 複製網址";
+  $("btn-copy").onclick = async () => { try { await navigator.clipboard.writeText(url); $("btn-copy").textContent = "✓ 已複製"; } catch { prompt("請複製這個網址：", url); } };
+  $("btn-open").onclick = () => window.open(url, "_blank");
+  try {
+    qrLib ||= await new Promise((res, rej) => {
+      const s = el("script", { src: "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" });
+      s.onload = () => res(window.qrcode); s.onerror = rej; document.head.append(s);
+    });
+    const qr = qrLib(0, "M"); qr.addData(url); qr.make();
+    $("share-qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+  } catch (e) { $("share-qr").textContent = "（QR Code 載入失敗，請直接複製網址）"; }
+}
+$("btn-close-share").onclick = () => $("share-modal").classList.add("hidden");
+$("share-modal").onclick = e => { if (e.target.id === "share-modal") $("share-modal").classList.add("hidden"); };
+
+/* ====================== 試題編輯器 ====================== */
+let cur = null;
+function markDirty(){ dirty = true; $("save-state").style.color = ""; $("save-state").textContent = "有修改尚未儲存"; $("save-state").className = "small err"; }
+
+function openEditor(t){
+  if (!showTab("edit")) return;
+  cur = structuredClone({ ...t, updatedAt: null, createdAt: null });
+  cur.config = { ...baseConfig(), ...(cur.config || {}) };
+  cur.parts ||= [];
+  $("edit-id").textContent = cur.isNew ? "新試題（還沒儲存）" : `試題代號：${cur.id}`;
+  $("e-title").value = cur.title || "";
+  $("e-retries").value = String(cur.config.maxRetries ?? 1);
+  $("e-rate").value = String(cur.config.voiceRate ?? 0.85);
+  $("e-replay").checked = !!cur.config.allowReplay;
+  $("e-showtext").checked = !!cur.config.showQuestionText;
+  $("e-published").checked = !!cur.published;
+  dirty = !!cur.isNew;
+  $("save-state").style.color = "";
+  $("save-state").textContent = cur.isNew ? "還沒儲存" : "";
+  $("save-state").className = "small " + (cur.isNew ? "err" : "muted");
+  renderParts();
+}
+$("e-title").oninput = e => { cur.title = e.target.value; markDirty(); };
+$("e-retries").onchange = e => { cur.config.maxRetries = Number(e.target.value); markDirty(); };
+$("e-rate").onchange = e => { cur.config.voiceRate = Number(e.target.value); markDirty(); };
+$("e-replay").onchange = e => { cur.config.allowReplay = e.target.checked; markDirty(); };
+$("e-showtext").onchange = e => { cur.config.showQuestionText = e.target.checked; markDirty(); };
+$("e-published").onchange = e => { cur.published = e.target.checked; markDirty(); };
+$("btn-back").onclick = () => { if (showTab("tests")) renderTests(); };
+$("btn-add-part").onclick = () => { cur.parts.push(blankPart(cur.parts.length)); markDirty(); renderParts(); };
+$("btn-preview").onclick = () => {
+  if (cur.isNew || dirty) return alert("請先按「儲存」，再預覽。");
+  window.open(studentUrl(cur, true), "_blank");
+};
+$("btn-share-cur").onclick = () => { if (cur.isNew) return alert("請先按「儲存」。"); share(cur); };
+
+const move = (arr, i, d) => { const j = i + d; if (j < 0 || j >= arr.length) return; [arr[i], arr[j]] = [arr[j], arr[i]]; };
+
+function field(label, node, hint){
+  return el("div", {}, el("label", { className: "f" }, label, hint ? el("span", { className: "muted", textContent: `（${hint}）` }) : null), node);
+}
+function textInput(obj, key, ph, multiline){
+  const n = el(multiline ? "textarea" : "input", { value: obj[key] || "", placeholder: ph || "", rows: 2 });
+  if (!multiline) n.type = "text";
+  n.oninput = () => { obj[key] = n.value; markDirty(); };
+  return n;
+}
+function numInput(obj, key){
+  const n = el("input", { type: "number", min: 0, max: 600, value: obj[key] ?? 0 });
+  n.oninput = () => { obj[key] = Math.max(0, Math.min(600, Number(n.value) || 0)); markDirty(); };
+  return n;
+}
+
+function renderParts(){
+  const box = $("e-parts"); box.innerHTML = "";
+  cur.parts.forEach((p, pi) => {
+    const items = el("div");
+    p.items.forEach((it, ii) => items.append(renderItem(p, pi, it, ii)));
+    box.append(el("div", { className: "part" },
+      el("div", { className: "part-head" },
+        el("span", { className: "num", textContent: `部分 ${pi + 1}` }),
+        el("span", { className: "grow" }),
+        el("button", { className: "btn plain sm", textContent: "↑", title: "往上移", onclick: () => { move(cur.parts, pi, -1); markDirty(); renderParts(); } }),
+        el("button", { className: "btn plain sm", textContent: "↓", title: "往下移", onclick: () => { move(cur.parts, pi, 1); markDirty(); renderParts(); } }),
+        el("button", { className: "btn danger sm", textContent: "刪除這個部分", onclick: () => { if (confirm(`刪除「${p.title}」和裡面的 ${p.items.length} 題？`)) { cur.parts.splice(pi, 1); markDirty(); renderParts(); } } })),
+      el("div", { className: "two" },
+        field("部分名稱", textInput(p, "title", "例如：第一部分：暖身問答")),
+        field("英文名稱", textInput(p, "titleEn", "例如：Part 1 · Warm-up"), "可不填")),
+      field("給學生的說明", textInput(p, "intro", "例如：請看圖片，聽完問題後用英文回答。", true), "開始這個部分前會顯示"),
+      items,
+      el("button", { className: "btn ghost sm", style: "margin-top:12px", textContent: "＋ 在這個部分新增一題", onclick: () => { p.items.push(blankItem()); markDirty(); renderParts(); } })));
+  });
+}
+
+function renderItem(p, pi, it, ii){
+  it.images ||= []; it.scenes ||= [];
+  const status = el("span", { className: "small muted" });
+
+  // 圖片
+  const thumbs = el("div", { className: "thumbs" });
+  let n = 0;
+  it.scenes.forEach((s, si) => thumbs.append(el("div", { className: "thumb", textContent: `內建圖\n${s}` },
+    el("span", { className: "n", textContent: ++n }),
+    el("button", { className: "x", textContent: "✕", title: "移除", onclick: () => { it.scenes.splice(si, 1); markDirty(); renderParts(); } }))));
+  it.images.forEach((im, k) => thumbs.append(el("div", { className: "thumb" },
+    el("img", { src: im.url, alt: "" }),
+    el("span", { className: "n", textContent: ++n }),
+    el("button", { className: "x", textContent: "✕", title: "移除", onclick: () => { it.images.splice(k, 1); markDirty(); renderParts(); } }))));
+  const imgInput = el("input", { type: "file", accept: "image/*", multiple: true });
+  imgInput.onchange = async () => {
+    const files = [...imgInput.files]; if (!files.length) return;
+    try {
+      for (const [k, f] of files.entries()) {
+        status.textContent = `圖片上傳中…（${k + 1}/${files.length}）`;
+        it.images.push(await uploadAsset(await shrinkImage(f), f.name));
+      }
+      markDirty(); renderParts();
+    } catch (err) { console.error(err); status.textContent = "圖片上傳失敗：" + (err.code || err.message); status.className = "small err"; }
+  };
+
+  // 考官錄音檔
+  const audInput = el("input", { type: "file", accept: "audio/*" });
+  audInput.onchange = async () => {
+    const f = audInput.files[0]; if (!f) return;
+    if (f.size > 20 * 1024 * 1024) { status.textContent = "音檔太大了（上限 20MB）"; status.className = "small err"; return; }
+    try { status.textContent = "音檔上傳中…"; it.audio = await uploadAsset(f, f.name); markDirty(); renderParts(); }
+    catch (err) { console.error(err); status.textContent = "音檔上傳失敗：" + (err.code || err.message); status.className = "small err"; }
+  };
+  const audRow = it.audio?.url
+    ? el("div", { className: "aud" }, el("audio", { controls: true, preload: "none", src: it.audio.url }),
+        el("button", { className: "btn danger sm", textContent: "移除音檔", onclick: () => { it.audio = null; markDirty(); renderParts(); } }))
+    : el("label", { className: "btn ghost sm filebtn" }, "🎵 上傳考官錄音（mp3 / m4a）", audInput);
+
+  return el("div", { className: "item" },
+    el("div", { className: "item-head" },
+      el("b", { textContent: `第 ${ii + 1} 題` }),
+      el("button", { className: "btn plain sm", textContent: "↑", onclick: () => { move(p.items, ii, -1); markDirty(); renderParts(); } }),
+      el("button", { className: "btn plain sm", textContent: "↓", onclick: () => { move(p.items, ii, 1); markDirty(); renderParts(); } }),
+      el("button", { className: "btn plain sm", textContent: "複製", onclick: () => { p.items.splice(ii + 1, 0, structuredClone(it)); markDirty(); renderParts(); } }),
+      el("button", { className: "btn danger sm", textContent: "刪除", onclick: () => { if (confirm("刪除這一題？")) { p.items.splice(ii, 1); markDirty(); renderParts(); } } })),
+    field("考官說的話", textInput(it, "say", "例如：Look at the picture. What is the boy doing?", true), "電腦會用英文唸出來；有上傳考官錄音就改播錄音"),
+    el("div", { style: "margin-top:6px" }, audRow),
+    el("div", { className: "two" },
+      field("螢幕上的文字", textInput(it, "text", "朗讀題的句子，例如：I have a red bike."), "可不填"),
+      field("小提示", textInput(it, "hint", "例如：可以這樣開始：This is Amy…"), "可不填")),
+    el("label", { className: "f" }, "圖片 ", el("span", { className: "muted", textContent: "（可不放；放 2 張以上會排成連環圖，依上傳順序編號）" })),
+    thumbs,
+    el("div", { className: "row", style: "margin-top:8px" }, el("label", { className: "btn ghost sm filebtn" }, "🖼️ 上傳圖片", imgInput), status),
+    el("div", { className: "two" },
+      field("準備時間（秒）", numInput(it, "prep")),
+      field("作答 / 錄音時間（秒）", numInput(it, "answer"))));
+}
+
+/* 上傳試題用的圖片或音檔到 Storage，回傳 { url, path, name } */
+async function uploadAsset(blob, name){
+  const clean = String(name).replace(/[^\w.\-]+/g, "_").slice(-60);
+  const path = `test-assets/${cur.id}/${Date.now()}-${clean}`;
+  const r = S.ref(storage, path);
+  const ext = clean.split(".").pop().toLowerCase();
+  const guess = { mp3: "audio/mpeg", m4a: "audio/mp4", wav: "audio/wav", ogg: "audio/ogg", aac: "audio/aac", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp" }[ext];
+  await S.uploadBytes(r, blob, { contentType: blob.type || guess || "application/octet-stream" });
+  return { url: await S.getDownloadURL(r), path, name: String(name) };
+}
+/* 手機照片常常很大：自動縮到最長邊 1600px，讓學生載入比較快 */
+async function shrinkImage(file){
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    if (scale === 1 && file.size < 800 * 1024) return file;
+    const c = el("canvas", { width: Math.round(bmp.width * scale), height: Math.round(bmp.height * scale) });
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise(res => c.toBlob(b => res(b || file), "image/jpeg", 0.85));
+  } catch { return file; }
+}
+
+/* 儲存 */
+$("btn-save").onclick = async () => {
+  if (!cur.title?.trim()) { alert("請輸入試題名稱。"); $("e-title").focus(); return; }
+  const total = cur.parts.reduce((n, p) => n + p.items.length, 0);
+  if (!total) { alert("至少要有一題喔！"); return; }
+  const btn = $("btn-save"); btn.disabled = true; $("save-state").textContent = "儲存中…"; $("save-state").className = "small muted";
+  try {
+    const data = {
+      title: cur.title.trim(),
+      published: !!cur.published,
+      config: cur.config,
+      parts: cur.parts.map((p, pi) => ({
+        title: p.title || "", titleEn: p.titleEn || "", intro: p.intro || "",
+        items: p.items.map((it, ii) => ({
+          id: `P${pi + 1}-${ii + 1}`,
+          say: it.say || "", text: it.text || "", hint: it.hint || "",
+          scenes: it.scenes || [], images: it.images || [], audio: it.audio || null,
+          prep: Number(it.prep) || 0, answer: Number(it.answer) || 15,
+        })),
+      })),
+      updatedAt: F.serverTimestamp(),
+    };
+    if (cur.isNew) data.createdAt = F.serverTimestamp();
+    await F.setDoc(F.doc(db, "tests", cur.id), data, { merge: true });
+    cur.isNew = false; dirty = false;
+    $("edit-id").textContent = `試題代號：${cur.id}`;
+    $("save-state").textContent = `✓ 已儲存（${new Date().toLocaleTimeString("zh-TW", { hour12: false })}）`; $("save-state").className = "small";
+    $("save-state").style.color = "var(--ok)";
+    await loadTests();
+  } catch (err) {
+    console.error(err);
+    $("save-state").textContent = "儲存失敗：" + (err.code || err.message); $("save-state").className = "small err";
+  } finally { btn.disabled = false; }
+};
 </script>
 </body>
 </html>
