@@ -109,7 +109,7 @@
     <ul>
       <li>找一個安靜的地方，戴耳機會更好。</li>
       <li>瀏覽器問「要不要使用麥克風」時，請按 <b>允許</b>。</li>
-      <li>測驗大約 10 分鐘，中途不要關掉或重新整理網頁。</li>
+      <li>測驗大約 <b id="est-min">10</b> 分鐘，中途不要關掉或重新整理網頁。</li>
     </ul>
   </div>
   <div class="err" id="welcome-err"></div>
@@ -134,6 +134,7 @@
   <div class="part-name" id="part-en"></div>
   <h2 id="part-title"></h2>
   <div class="tips" id="part-intro" style="font-size:17px"></div>
+  <p class="sub" id="part-time" style="margin-top:10px"></p>
   <button class="btn" id="btn-part-go">我知道了，開始 →</button>
 </section>
 
@@ -231,8 +232,15 @@ function useTest(t){
     ...it, id: it.id || `P${pi + 1}-${ii + 1}`, part, pi, pics: picsOf(it),
   })));
   $("app-title").textContent = t.title || "口說練習";
+  const total = (t.parts || []).reduce((n, _, pi) => n + partSec(pi), 0) + speechSec(C.outro);
+  $("est-min").textContent = Math.max(1, Math.round(total / 60));
   document.title = t.title || document.title;
 }
+/* 估計作答時間：考官說話 + 準備 + 作答 + 嗶聲和聽自己錄音的時間（學生提早按按鈕會更快） */
+function speechSec(text){ return fill(text).length / (14 * (C.voiceRate || 0.85)); }
+function itemSec(it){ return speechSec(it.say) + speechSec(it.cue) + (Number(it.prep) || 0) + (Number(it.answer) || 15) + 3.5; }
+function partSec(pi){ return items.filter(it => it.pi === pi).reduce((n, it) => n + itemSec(it), 0) + 8; }
+const halfMin = sec => Math.max(0.5, Math.round(sec / 30) / 2);
 function setBadge(text, online){
   $("mode-badge").textContent = text; $("mode-badge").classList.toggle("online", !!online);
 }
@@ -598,6 +606,8 @@ async function showPartIntro(part){
   $("part-en").textContent = part.titleEn || "";
   $("part-title").textContent = part.title || "";
   $("part-intro").textContent = part.intro || "準備好了就按開始。";
+  const pi = items.find(it => it.part === part)?.pi;
+  $("part-time").textContent = pi == null ? "" : `⏱ 這個部分大約 ${halfMin(partSec(pi))} 分鐘`;
   show("screen-part");
   await waitClick(["btn-part-go"]);
 }
