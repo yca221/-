@@ -15,6 +15,8 @@
 | `site/index.html` | 學生作答頁 | 不用 |
 | `site/teacher.html` | 老師後台（試題管理、聽錄音） | 不用 |
 | `site/firebase.js` | 共用的 Firebase 載入程式 | 不用 |
+| `site/vendor/lame.min.js` | 把錄音轉成 MP3 的程式（lamejs，LGPL） | 不用 |
+| `site/tests/` | **跟網站一起部署的試題**（`tests.js` + 圖片）。格式見 `tests.example.js` | 選用 |
 | `site/config.js` | **Firebase 設定、老師 Email** | ✅ 要貼上自己的 |
 | `site/questions.js` | 範例題（後台還沒有開放的試題時使用；也是「用小學英檢架構建立」的範本） | 不用 |
 | `site/images/` | 放自己的圖片（可不用） | 選用 |
@@ -60,8 +62,16 @@ Netlify → Add new site → Import an existing project → 選這個 GitHub rep
 - 學生作答：在後台「試題管理」按 **🔗 網址 / QR** 取得每份試題的專屬網址（例如 `https://xxx.netlify.app/?test=試題代號`）
 - 學生直接打開 `https://xxx.netlify.app/` 的話，會列出所有「開放中」的試題讓學生選
 
+## 跟網站一起部署的試題（`site/tests/`）
+除了在後台建立試題，也可以把試題寫成 `site/tests/tests.js`（格式見 `tests.example.js`），圖片放在 `site/tests/試題資料夾/`。
+- 學生網址：`網站網址/?test=試題代號`；首頁也會列出這些試題
+- 每題可以設定「準備時間結束後考官說」（例如朗讀題的 *Now, read the sentences aloud.*），說完才嗶聲開始錄音
+- ⚠️ `site/tests/` 裡的檔案**不會**上傳到 GitHub（見 `.gitignore`）：課本的題目和插圖有版權，不適合放在公開的 repo。部署時請用拖拉方式上傳含有 tests 資料夾的 site 資料夾。
+- 在後台「試題管理」可以選這些試題當範本，建立一份可以線上修改的版本。
+
 ## 錄音存在哪裡？
-- **Storage**：`recordings/試題代號/班級/日期時間_座號_姓名/P1-1.webm` …（每題一個檔）
+- **Storage**：`recordings/試題代號/班級/日期時間_座號_姓名/P1-1.mp3` …（每題一個 **MP3** 檔，22kHz 單聲道 64kbps，1 分鐘約 0.5MB）
+- 錄音會在學生的瀏覽器裡先轉成 MP3 再上傳；萬一轉檔失敗（極少數舊瀏覽器），會改存原本的格式（.webm / .m4a），不會遺失
 - **Firestore**：`submissions` 集合，每位學生一筆（班級、座號、姓名、作答時間、每題檔案路徑與秒數）
 - 試題本身存在 Firestore 的 `tests` 集合；試題用的圖片、考官錄音存在 Storage 的 `test-assets/試題代號/`
 

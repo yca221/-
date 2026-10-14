@@ -110,9 +110,10 @@
   <!-- ============ 試題列表 ============ -->
   <section id="tab-tests" class="hidden">
     <div class="box">
-      <div class="row">
-        <b class="grow">建立新的口說試題</b>
-        <button class="btn" id="btn-new-template">＋ 用小學英檢架構建立</button>
+      <b>建立新的口說試題</b>
+      <div class="row" style="margin-top:8px">
+        <select id="tpl" class="grow"></select>
+        <button class="btn" id="btn-new-template">＋ 用這份當範本建立</button>
         <button class="btn ghost" id="btn-new-blank">＋ 空白試題</button>
       </div>
       <p class="muted small" style="margin:8px 0 0">建立後可以修改題目、上傳圖片和考官錄音檔。每份試題都有自己的網址和 QR Code，打開「開放給學生作答」後學生才看得到。</p>
@@ -138,6 +139,8 @@
         <div><label class="f">電腦語音速度 <span class="muted">（沒有上傳考官錄音時使用）</span></label>
           <select id="e-rate"><option value="0.7">慢</option><option value="0.85">稍慢（建議）</option><option value="1">正常</option></select></div>
       </div>
+      <label class="f">測驗結束時考官說 <span class="muted">（可不填）</span></label>
+      <input type="text" id="e-outro" placeholder="例如：Thank you. This is the end of the test. Goodbye.">
       <div class="row" style="margin-top:12px;gap:18px">
         <label class="switch"><input type="checkbox" id="e-replay"> 準備時間可以「再聽一次」</label>
         <label class="switch"><input type="checkbox" id="e-showtext"> 題目文字也顯示在螢幕上</label>
@@ -170,6 +173,7 @@
 
 <script src="config.js"></script>
 <script src="questions.js"></script>
+<script src="tests/tests.js" onerror="void 0"></script>
 <script type="module">
 const $ = id => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids.filter(k => k != null)); return e; };
@@ -326,22 +330,37 @@ function renderTests(){
   }
 }
 const newId = () => F.doc(F.collection(db, "tests")).id;
-function templateParts(){
-  // 用 questions.js 的範例題當起點（表情符號圖片會變成「內建圖」）
-  return (window.TEST_PARTS || []).map(p => ({
+/* 範本：網站內附的試題（tests/tests.js）＋ questions.js 的範例題 */
+const TEMPLATES = [
+  ...(window.BUILTIN_TESTS || []).filter(t => t && Array.isArray(t.parts)),
+  { id: "sample", title: "小學英檢架構範例題（表情符號圖）", config: window.TEST_CONFIG || {}, parts: window.TEST_PARTS || [] },
+];
+$("tpl").innerHTML = "";
+TEMPLATES.forEach((t, i) => $("tpl").append(new Option(t.title || t.id, i)));
+function templateParts(t){
+  // 內附圖片會變成網址（跟網站放在一起）；表情符號圖片會變成「內建圖」
+  return (t.parts || []).map(p => ({
     title: p.title || "", titleEn: p.titleEn || "", intro: p.intro || "",
-    items: (p.items || []).map(it => ({
-      say: it.say || "", text: it.text || "", hint: it.hint || "",
-      scenes: [].concat(it.picture || [], it.pictures || []).filter(x => typeof x === "string"),
-      images: [], audio: null, prep: it.prep ?? 5, answer: it.answer ?? 15,
-    })),
+    items: (p.items || []).map(it => {
+      const pics = [].concat(it.picture || [], it.pictures || []);
+      return {
+        say: it.say || "", cue: it.cue || "", text: it.text || "", hint: it.hint || "",
+        scenes: pics.filter(x => typeof x === "string"),
+        images: pics.filter(x => x?.src).map(x => ({ url: new URL(x.src, location.href).href, path: null, name: x.src.split("/").pop() })),
+        audio: null, prep: it.prep ?? 5, answer: it.answer ?? 15,
+      };
+    }),
   }));
 }
-const blankItem = () => ({ say: "", text: "", hint: "", scenes: [], images: [], audio: null, prep: 5, answer: 15 });
+const blankItem = () => ({ say: "", cue: "", text: "", hint: "", scenes: [], images: [], audio: null, prep: 5, answer: 15 });
 const blankPart = n => ({ title: `第${"一二三四五六七八九十"[n] || n + 1}部分`, titleEn: `Part ${n + 1}`, intro: "", items: [blankItem()] });
-const baseConfig = () => ({ maxRetries: 1, voiceRate: 0.85, allowReplay: true, showQuestionText: false });
+const baseConfig = () => ({ maxRetries: 1, voiceRate: 0.85, allowReplay: true, showQuestionText: false, outro: "" });
 
-$("btn-new-template").onclick = () => openEditor({ id: newId(), isNew: true, title: "小學英檢口說模擬測驗", published: false, config: baseConfig(), parts: templateParts() });
+$("btn-new-template").onclick = () => {
+  const t = TEMPLATES[Number($("tpl").value) || 0];
+  const { demo, testId, title, ...cfg } = t.config || {};
+  openEditor({ id: newId(), isNew: true, title: (t.title || "口說測驗") + "（我的版本）", published: false, config: { ...baseConfig(), ...cfg }, parts: templateParts(t) });
+};
 $("btn-new-blank").onclick = () => openEditor({ id: newId(), isNew: true, title: "", published: false, config: baseConfig(), parts: [blankPart(0)] });
 
 function duplicateTest(t){
@@ -403,6 +422,7 @@ function openEditor(t){
   $("e-rate").value = String(cur.config.voiceRate ?? 0.85);
   $("e-replay").checked = !!cur.config.allowReplay;
   $("e-showtext").checked = !!cur.config.showQuestionText;
+  $("e-outro").value = cur.config.outro || "";
   $("e-published").checked = !!cur.published;
   dirty = !!cur.isNew;
   $("save-state").style.color = "";
@@ -415,6 +435,7 @@ $("e-retries").onchange = e => { cur.config.maxRetries = Number(e.target.value);
 $("e-rate").onchange = e => { cur.config.voiceRate = Number(e.target.value); markDirty(); };
 $("e-replay").onchange = e => { cur.config.allowReplay = e.target.checked; markDirty(); };
 $("e-showtext").onchange = e => { cur.config.showQuestionText = e.target.checked; markDirty(); };
+$("e-outro").oninput = e => { cur.config.outro = e.target.value; markDirty(); };
 $("e-published").onchange = e => { cur.published = e.target.checked; markDirty(); };
 $("btn-back").onclick = () => { if (showTab("tests")) renderTests(); };
 $("btn-add-part").onclick = () => { cur.parts.push(blankPart(cur.parts.length)); markDirty(); renderParts(); };
@@ -508,11 +529,12 @@ function renderItem(p, pi, it, ii){
       el("button", { className: "btn plain sm", textContent: "↓", onclick: () => { move(p.items, ii, 1); markDirty(); renderParts(); } }),
       el("button", { className: "btn plain sm", textContent: "複製", onclick: () => { p.items.splice(ii + 1, 0, structuredClone(it)); markDirty(); renderParts(); } }),
       el("button", { className: "btn danger sm", textContent: "刪除", onclick: () => { if (confirm("刪除這一題？")) { p.items.splice(ii, 1); markDirty(); renderParts(); } } })),
-    field("考官說的話", textInput(it, "say", "例如：Look at the picture. What is the boy doing?", true), "電腦會用英文唸出來；有上傳考官錄音就改播錄音"),
+    field("考官說的話", textInput(it, "say", "例如：Look at the picture. What is the boy doing?", true), "電腦會用英文唸出來；有上傳考官錄音就改播錄音；寫 {greeting} 會自動變成 Good morning / afternoon"),
     el("div", { style: "margin-top:6px" }, audRow),
+    field("螢幕上的文字", textInput(it, "text", "朗讀題的句子，可以寫好幾行，例如：\n1. It is Christmas Day.\n2. The Christmas tree looks pretty.", true), "可不填；換行會照樣顯示"),
     el("div", { className: "two" },
-      field("螢幕上的文字", textInput(it, "text", "朗讀題的句子，例如：I have a red bike."), "可不填"),
-      field("小提示", textInput(it, "hint", "例如：可以這樣開始：This is Amy…"), "可不填")),
+      field("準備時間結束後考官說", textInput(it, "cue", "例如：Now, read the sentences aloud.", true), "可不填；說完才「嗶」開始錄音"),
+      field("小提示", textInput(it, "hint", "例如：看看圖中的窗外"), "可不填；中文英文都可以")),
     el("label", { className: "f" }, "圖片 ", el("span", { className: "muted", textContent: "（可不放；放 2 張以上會排成連環圖，依上傳順序編號）" })),
     thumbs,
     el("div", { className: "row", style: "margin-top:8px" }, el("label", { className: "btn ghost sm filebtn" }, "🖼️ 上傳圖片", imgInput), status),
@@ -559,7 +581,7 @@ $("btn-save").onclick = async () => {
         title: p.title || "", titleEn: p.titleEn || "", intro: p.intro || "",
         items: p.items.map((it, ii) => ({
           id: `P${pi + 1}-${ii + 1}`,
-          say: it.say || "", text: it.text || "", hint: it.hint || "",
+          say: it.say || "", cue: it.cue || "", text: it.text || "", hint: it.hint || "",
           scenes: it.scenes || [], images: it.images || [], audio: it.audio || null,
           prep: Number(it.prep) || 0, answer: Number(it.answer) || 15,
         })),

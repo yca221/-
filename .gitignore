@@ -1,0 +1,4 @@
+# 有版權的試題內容（課本圖片、題目）不要放進公開的 GitHub
+site/tests/*
+!site/tests/README.txt
+!site/tests/tests.example.js

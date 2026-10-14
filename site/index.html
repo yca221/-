@@ -50,6 +50,8 @@
   .part-name{font-weight:800;color:var(--accent);font-size:15px}
   .prompt-text{font-size:28px;font-weight:800;text-align:center;padding:22px 12px;border:3px dashed var(--line);
     border-radius:18px;margin:6px 0 4px;line-height:1.4;word-break:break-word}
+  .prompt-text{white-space:pre-line}
+  .prompt-text.long{font-size:20px;text-align:left;line-height:1.7;padding:16px 18px}
   .listen-box{font-size:20px;font-weight:700;text-align:center;padding:26px 12px;border-radius:18px;background:#F7F3EC;color:var(--muted)}
   .q-text{font-size:20px;font-weight:700;text-align:center;margin:10px 0 0}
   .hint{text-align:center;color:var(--muted);font-size:15px;margin-top:10px}
@@ -57,6 +59,11 @@
   .pic{position:relative;width:100%;aspect-ratio:4/3;border-radius:16px;overflow:hidden;container-type:inline-size;border:2px solid var(--line)}
   .pic .emo{position:absolute;transform:translate(-50%,-50%);line-height:1;user-select:none}
   .pic img{width:100%;height:100%;object-fit:contain;background:#fff}
+  .pic.photo{aspect-ratio:auto;background:#fff;cursor:zoom-in} .pic.photo img{height:auto;display:block}
+  .pic.photo.broken{min-height:120px;cursor:default}
+  .zoom{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:12px;z-index:20;cursor:zoom-out}
+  .zoom img{max-width:100%;max-height:100%;border-radius:10px;background:#fff}
+  .zoom-tip{text-align:center;color:var(--muted);font-size:13px;margin-top:6px}
   .pic .missing{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;padding:10px;text-align:center}
   .story{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .story .num{position:absolute;left:6px;top:6px;background:var(--ink);color:#fff;font-weight:800;font-size:14px;
@@ -175,6 +182,10 @@
 
 <script src="config.js"></script>
 <script src="questions.js"></script>
+<!-- 網站內附的試題（可以沒有這個檔案） -->
+<script src="tests/tests.js" onerror="void 0"></script>
+<!-- 把錄音轉成 MP3 用 -->
+<script src="vendor/lame.min.js"></script>
 <script type="module">
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -200,9 +211,10 @@ window.addEventListener("beforeunload", e => { if (testing) { e.preventDefault()
 /* ---------------- 載入試題 ----------------
    ?test=試題代號 → 讀取老師在後台建立的試題
    沒有指定      → 列出所有開放中的試題讓學生選；都沒有的話用 questions.js 的範例題 */
+const BUILTIN = (window.BUILTIN_TESTS || []).filter(t => t && t.id && Array.isArray(t.parts));
 function sampleTest(){
   const cfg = window.TEST_CONFIG || {};
-  return { id: cfg.testId || "sample", title: cfg.title || "口說練習", config: cfg, parts: window.TEST_PARTS || [] };
+  return { id: cfg.testId || "sample", title: cfg.title || "口說練習", config: cfg, parts: window.TEST_PARTS || [], demo: true };
 }
 function picsOf(it){
   const list = [];
@@ -228,8 +240,8 @@ function ready(t){
   useTest(t);
   if (!items.length) return bootError("這份試題還沒有題目，請跟老師確認。");
   if (PREVIEW) setBadge("👀 老師預覽模式：錄音不會上傳");
-  else if (firebaseReady() && t.id !== sampleTest().id) setBadge("✅ 已連線，錄音會自動交給老師", true);
-  else if (firebaseReady()) setBadge("🧪 目前沒有開放的試題，這是範例題（錄音不會上傳）");
+  else if (t.demo) setBadge("🧪 目前沒有開放的試題，這是範例題（錄音不會上傳）");
+  else if (firebaseReady()) setBadge("✅ 已連線，錄音會自動交給老師", true);
   else setBadge("🧪 本機測試模式（尚未連接後台，錄音不會上傳）");
   $("btn-to-mic").disabled = false;
 }
@@ -240,6 +252,9 @@ function bootError(msg){
 }
 async function boot(){
   const wanted = params.get("test");
+  const local = BUILTIN.find(t => t.id === wanted);
+  if (local) return ready(local);
+  let list = BUILTIN.filter(t => !t.hidden);          // 網站內附的試題
   if (firebaseReady()) {
     try {
       const { loadFirebase, waitForUser } = await fbModule();
@@ -251,16 +266,7 @@ async function boot(){
         return ready({ id: snap.id, ...snap.data() });
       }
       const qs = await fb.fs.getDocs(fb.fs.query(fb.fs.collection(fb.db, "tests"), fb.fs.where("published", "==", true)));
-      const list = qs.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => String(a.title).localeCompare(String(b.title), "zh-Hant", { numeric: true }));
-      if (list.length === 1) return ready(list[0]);
-      if (list.length > 1) {
-        const sel = $("in-test"); sel.innerHTML = "";
-        list.forEach(t => sel.append(new Option(t.title || t.id, t.id)));
-        sel.onchange = () => ready(list.find(t => t.id === sel.value));
-        $("pick-wrap").classList.remove("hidden");
-        return ready(list[0]);
-      }
+      list = list.concat(qs.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) {
       console.error(err);
       if (wanted || PREVIEW) {
@@ -269,8 +275,17 @@ async function boot(){
           : "試題讀取失敗，請檢查網路後重新整理網頁。");
       }
     }
+  } else if (wanted) {
+    return bootError("找不到這份試題，請跟老師確認網址是否正確。");
   }
-  ready(sampleTest());
+  list.sort((a, b) => String(a.title).localeCompare(String(b.title), "zh-Hant", { numeric: true }));
+  if (list.length > 1) {
+    const sel = $("in-test"); sel.innerHTML = "";
+    list.forEach(t => sel.append(new Option(t.title || t.id, t.id)));
+    sel.onchange = () => ready(list.find(t => t.id === sel.value));
+    $("pick-wrap").classList.remove("hidden");
+  }
+  ready(list[0] || sampleTest());
 }
 boot();
 
@@ -344,6 +359,34 @@ function beep(){
   });
 }
 
+/* ---------------- 把錄音轉成 MP3（老師後台收到的都是 .mp3） ---------------- */
+async function toMp3(raw){
+  if (!window.lamejs || !raw.blob.size) return raw;
+  try {
+    const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ab = await raw.blob.arrayBuffer();
+    const decoded = await new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej));
+    const rate = 22050;                                   // 說話用 22kHz 單聲道就很清楚，檔案也小
+    const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const off = new Offline(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
+    const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start(0);
+    const pcm = (await off.startRendering()).getChannelData(0);
+    const enc = new lamejs.Mp3Encoder(1, rate, 64);
+    const out = [], block = 1152, i16 = new Int16Array(block);
+    for (let i = 0; i < pcm.length; i += block) {
+      const n = Math.min(block, pcm.length - i);
+      for (let k = 0; k < n; k++) { const v = Math.max(-1, Math.min(1, pcm[i + k])); i16[k] = v < 0 ? v * 0x8000 : v * 0x7fff; }
+      const b = enc.encodeBuffer(n === block ? i16 : i16.subarray(0, n));
+      if (b.length) out.push(new Uint8Array(b.buffer, b.byteOffset, b.length).slice());
+    }
+    const last = enc.flush(); if (last.length) out.push(new Uint8Array(last.buffer, last.byteOffset, last.length).slice());
+    return { blob: new Blob(out, { type: "audio/mpeg" }), mime: "audio/mpeg", ext: "mp3", duration: raw.duration };
+  } catch (err) {
+    console.warn("MP3 轉檔失敗，改用原本的錄音格式", err);
+    return raw;
+  }
+}
+
 /* ---------------- 播放題目：老師上傳的錄音檔，或瀏覽器內建語音 ---------------- */
 const hasTTS = "speechSynthesis" in window;
 let voice = null;
@@ -354,10 +397,25 @@ function loadVoice(){
        || vs.find(v => /^en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
 }
 if (hasTTS) { loadVoice(); speechSynthesis.onvoiceschanged = loadVoice; }
-function speak(text){
+/* {greeting} 會依照時間變成 Good morning / Good afternoon / Good evening */
+function fill(text){
+  const h = new Date().getHours();
+  return String(text || "").replaceAll("{greeting}", h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening");
+}
+// 一句一句唸（Chrome 唸太長的句子會中途停掉）
+let speechChain = 0;
+async function speak(text){
+  const me = ++speechChain;
+  const sentences = fill(text).split(/(?<=[.?!])\s+/).filter(Boolean);
+  if (hasTTS) speechSynthesis.cancel();
+  for (const s of sentences) {
+    if (me !== speechChain) break;          // 被停止或有新的語音開始了
+    await speakOne(s);
+  }
+}
+function speakOne(text){
   return new Promise(resolve => {
     if (!hasTTS || !text) return resolve();
-    speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "en-US"; if (voice) u.voice = voice; u.rate = C.voiceRate || 0.85;
     let fin = false;
@@ -394,7 +452,7 @@ function playUrl(url){
   });
 }
 const playQuestion = it => it.audio?.url ? playUrl(it.audio.url) : speak(it.say);
-function stopQuestion(){ if (hasTTS) speechSynthesis.cancel(); qAudio.pause(); }
+function stopQuestion(){ speechChain++; if (hasTTS) speechSynthesis.cancel(); qAudio.pause(); }
 
 /* ---------------- 畫面 2：麥克風測試 ---------------- */
 let micTested = false;
@@ -421,11 +479,17 @@ $("btn-start").onclick = () => { if (micTested) { unlockAudio(); runTest(); } };
 function renderPicture(key){
   const p = typeof key === "string" ? PICS[key] : key;
   const box = document.createElement("div"); box.className = "pic";
-  const missing = msg => { box.innerHTML = ""; const m = document.createElement("div"); m.className = "missing"; m.textContent = msg; box.appendChild(m); };
+  const missing = msg => { box.classList.add("broken"); box.onclick = null; box.innerHTML = ""; const m = document.createElement("div"); m.className = "missing"; m.textContent = msg; box.appendChild(m); };
   if (!p) { missing(`找不到圖片「${String(key)}」`); return box; }
   if (p.src) {
+    box.classList.add("photo");
     const img = document.createElement("img"); img.src = p.src; img.alt = "";
     img.onerror = () => missing("圖片載入失敗，請檢查網路或跟老師說");
+    box.onclick = () => {                              // 點一下放大圖片
+      const z = document.createElement("div"); z.className = "zoom";
+      const big = document.createElement("img"); big.src = p.src; z.appendChild(big);
+      z.onclick = () => z.remove(); document.body.appendChild(z);
+    };
     box.appendChild(img); return box;
   }
   box.style.background = p.bg || "#EAF6FF";
@@ -468,7 +532,9 @@ function renderItem(it, i){
   $("pips").innerHTML = items.map((_, k) => `<span class="pip ${k < i ? "done" : k === i ? "active" : ""}"></span>`).join("");
   const body = $("item-body"); body.innerHTML = "";
   if (it.text) {
-    const t = document.createElement("div"); t.className = "prompt-text"; t.textContent = it.text; body.appendChild(t);
+    const t = document.createElement("div"); t.textContent = it.text;
+    t.className = "prompt-text" + (/\n/.test(it.text) || it.text.length > 45 ? " long" : "");
+    body.appendChild(t);
   }
   if (it.pics.length === 1) body.appendChild(renderPicture(it.pics[0]));
   if (it.pics.length > 1) {
@@ -476,11 +542,12 @@ function renderItem(it, i){
     it.pics.forEach((k, n) => { const p = renderPicture(k); const b = document.createElement("span"); b.className = "num"; b.textContent = n + 1; p.prepend(b); g.appendChild(p); });
     body.appendChild(g);
   }
+  if (it.pics.some(k => k?.src)) { const z = document.createElement("div"); z.className = "zoom-tip"; z.textContent = "🔍 點圖片可以放大"; body.appendChild(z); }
   if (!it.text && !it.pics.length) {
     const l = document.createElement("div"); l.className = "listen-box"; l.textContent = "👂 請仔細聽題目"; body.appendChild(l);
   }
   if (it.say && !it.text && (C.showQuestionText || (!hasTTS && !it.audio?.url))) {
-    const q = document.createElement("div"); q.className = "q-text"; q.textContent = it.say; body.appendChild(q);
+    const q = document.createElement("div"); q.className = "q-text"; q.textContent = fill(it.say); body.appendChild(q);
   }
   if (it.hint) { const h = document.createElement("div"); h.className = "hint"; h.textContent = "💡 " + it.hint; body.appendChild(h); }
 }
@@ -506,13 +573,16 @@ async function runItem(it, i){
       await countdown(it.prep, $("btn-skip-prep"));
     }
     stopQuestion();
+    if (it.cue) { setStage("listen", "請聽考官說…", "Listen."); await speak(it.cue); }
     await beep();
     setStage("rec", '<span class="dot"></span>錄音中，請開始說', "說完可以按「我說完了」。");
     meterEl = $("rec-meter");
     const rec = startRecording();
     $("btn-stop").disabled = true; setTimeout(() => { $("btn-stop").disabled = false; }, 1500);
     await countdown(it.answer || 15, $("btn-stop"));
-    results[it.id] = await rec.stop();
+    const raw = await rec.stop();
+    setStage("listen", "處理錄音中…", "請稍等一下。");
+    results[it.id] = await toMp3(raw);
 
     const canRetry = attempt < (Number(C.maxRetries) || 0);
     setStage("review", "這題錄好了！", canRetry ? "可以先聽聽看，不滿意可以重錄一次。" : "可以先聽聽看，然後按下一題。");
@@ -539,6 +609,7 @@ async function runTest(){
     await runItem(items[i], i);
   }
   stream?.getTracks().forEach(t => t.stop());
+  if (C.outro) speak(C.outro);
   await uploadAll();
 }
 
@@ -570,7 +641,7 @@ async function uploadAll(){
   student.stamp ||= stamp();
   $("up-err").textContent = ""; $("btn-up-retry").classList.add("hidden");
   // 範例題、預覽、沒有後台 → 不上傳
-  if (!firebaseReady() || PREVIEW || TEST.id === sampleTest().id) { testing = false; return showLocalFallback(false); }
+  if (!firebaseReady() || PREVIEW || TEST.demo) { testing = false; return showLocalFallback(false); }
   $("up-emoji").textContent = "📤"; $("up-title").textContent = "正在把錄音交給老師…"; $("up-desc").textContent = "請不要關掉視窗。";
   buildRows();
   try {
@@ -595,7 +666,7 @@ async function uploadAll(){
         createdAt: fs.serverTimestamp(),
         userAgent: navigator.userAgent.slice(0, 300),
         items: items.filter(it => uploaded[it.id]).map(it => ({
-          id: it.id, part: it.part.title || "", say: it.say || "", text: it.text || "",
+          id: it.id, part: it.part.title || "", say: fill(it.say), text: it.text || "",
           path: uploaded[it.id], mime: results[it.id].mime, duration: results[it.id].duration,
         })),
       });
