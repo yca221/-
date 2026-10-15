@@ -35,7 +35,7 @@
    小班級的用量通常在免費額度內，但 Blaze **沒有自動上限**，請一定要到
    <https://console.cloud.google.com/billing> →「預算與快訊」設一個預算提醒（例如 NT$100）。
 3. **Firestore Database** → 建立資料庫 → 位置選 `asia-east1`（台灣）→ 先選「正式版模式」。
-4. **Storage** → 開始使用 → 同樣選 `asia-east1`。
+4. **Storage** → 開始使用 → 位置建議選 **`US-CENTRAL1`**（美國的這幾個地區才有 5GB 免費額度；選亞洲從第 1 MB 就開始收費，雖然很便宜）。位置選了之後不能改。
 5. **Authentication** → 開始使用 → 登入方式 → 啟用 **Google**（老師後台登入用）。
 6. 齒輪 ⚙️ → 專案設定 → 一般 → 「您的應用程式」按 `</>` 新增網頁應用程式，
    把出現的 `firebaseConfig` 內容貼到 **`site/config.js`**，並把 `TEACHER_EMAILS` 改成你的 Gmail。
