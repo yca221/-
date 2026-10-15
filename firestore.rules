@@ -7,7 +7,7 @@ service cloud.firestore {
     function isTeacher() {
       return request.auth != null
         && request.auth.token.email_verified == true
-        && request.auth.token.email in ['PASTE_TEACHER_EMAIL@gmail.com'];
+        && request.auth.token.email in ['y.ca221@gmail.com'];
     }
 
     // 試題：學生只能讀「開放中」的試題；只有老師能新增、修改、刪除
