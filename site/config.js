@@ -11,7 +11,7 @@ window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyBaaxF6pP_rA26Q5VXCK2I-1t9q4FHMhJ4",
   authDomain: "geptkidsg6.firebaseapp.com",
   projectId: "geptkidsg6",
-  storageBucket: "geptkidsg6-recordings",
+  storageBucket: "geptkidsg6.firebasestorage.app",
   messagingSenderId: "190203845657",
   appId: "1:190203845657:web:34c0caad12e53af3955e88",
 };
