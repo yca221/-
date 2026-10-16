@@ -88,9 +88,14 @@
   .dl-list a{display:block;margin-top:8px;color:var(--accent);font-weight:700;text-decoration:none;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
   .big-emoji{font-size:64px;text-align:center;line-height:1.2}
   @media (max-width:420px){ .prompt-text{font-size:23px} .card{padding:22px 16px} }
+  .top-bar{width:100%;max-width:640px;display:flex;justify-content:flex-end;padding:0 4px 8px}
+  .top-bar a{font-size:13px;color:var(--muted);text-decoration:none;padding:4px 10px;border-radius:8px;transition:background .15s}
+  .top-bar a:hover{background:var(--accent-soft);color:var(--accent)}
 </style>
 </head>
 <body>
+
+<nav class="top-bar"><a href="teacher.html">老師後台 →</a></nav>
 
 <!-- ================= 畫面 1：基本資料 ================= -->
 <section class="card" id="screen-welcome">
